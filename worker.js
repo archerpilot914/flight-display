@@ -9,6 +9,7 @@ export default {
    const attempts=[];
    for(const src of [
     ["adsb.fi","https://opendata.adsb.fi/api/v3/lat/"+lat+"/lon/"+lon+"/dist/100"],
+    ["airplanes.live","https://api.airplanes.live/v2/point/"+lat+"/"+lon+"/100"],
     ["adsb.lol","https://api.adsb.lol/v2/point/"+lat+"/"+lon+"/100"]
    ]){
     try{
