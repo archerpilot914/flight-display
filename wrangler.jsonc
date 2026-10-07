@@ -1,8 +1,1 @@
-{
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "flight-display",
-  "compatibility_date": "2026-10-07",
-  "assets": {
-    "directory": "."
-  }
-}
+{"$schema":"node_modules/wrangler/config-schema.json","name":"flight-display","main":"worker.js","compatibility_date":"2026-10-07","assets":{"directory":".","binding":"ASSETS","run_worker_first":["/api/*"]}}
