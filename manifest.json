@@ -1,0 +1,9 @@
+{
+  "name": "Flight Display",
+  "short_name": "FlightDisplay",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#06101c",
+  "theme_color": "#07111f",
+  "icons": []
+}
