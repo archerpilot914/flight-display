@@ -11,6 +11,16 @@ export default {
    }
    return Response.json({results},{headers:{"cache-control":"no-store"}});
   }
+  if(url.pathname==="/api/adsblol-debug"){
+   const target="https://api.adsb.lol/v2/point/43.5728/-71.4601/100";
+   const started=Date.now();
+   try{
+    const response=await fetch(target,{headers:{"accept":"application/json"},signal:AbortSignal.timeout(10000)});
+    const body=await response.text();
+    let count=null;try{const parsed=JSON.parse(body);count=(parsed.ac||parsed.aircraft||[]).length}catch(e){}
+    return Response.json({provider:"adsb.lol",status:response.status,elapsed_ms:Date.now()-started,bytes:body.length,aircraft_count:count,preview:body.slice(0,160)},{headers:{"cache-control":"no-store"}});
+   }catch(e){return Response.json({provider:"adsb.lol",error:String(e),elapsed_ms:Date.now()-started},{headers:{"cache-control":"no-store"}});}
+  }
   if(url.pathname==="/api/traffic"){
    const p=url.searchParams;
    const lat=((Number(p.get("lamin"))+Number(p.get("lamax")))/2)||43.5728;
