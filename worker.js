@@ -44,6 +44,20 @@ export default {
    }
    return Response.json({states:[],error:"all traffic sources failed",attempts},{status:502});
   }
+  if(url.pathname==="/api/airspace"){
+   const raw=(url.searchParams.get("bbox")||"-74,41,-69,45").split(",").map(Number);
+   if(raw.length!==4||raw.some(x=>!Number.isFinite(x))||raw[0]>=raw[2]||raw[1]>=raw[3]||raw[2]-raw[0]>12||raw[3]-raw[1]>10)return Response.json({error:"Invalid map bounds"},{status:400});
+   const q=new URL("https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Class_Airspace/FeatureServer/0/query");
+   q.searchParams.set("where","CLASS IN ('B','C','D')");
+   q.searchParams.set("geometry",raw.join(","));q.searchParams.set("geometryType","esriGeometryEnvelope");q.searchParams.set("inSR","4326");q.searchParams.set("spatialRel","esriSpatialRelIntersects");q.searchParams.set("outFields","CLASS,NAME,LOWER_DESC,UPPER_DESC,LOWER_VAL,UPPER_VAL,LOWER_UOM,UPPER_UOM");
+   q.searchParams.set("returnGeometry","true");q.searchParams.set("outSR","4326");q.searchParams.set("f","geojson");q.searchParams.set("resultRecordCount","2000");
+   try{const response=await fetch(q.toString(),{headers:{"accept":"application/geo+json"},signal:AbortSignal.timeout(12000)});
+    if(!response.ok)throw Error("FAA service HTTP "+response.status);
+    const data=await response.json();if(data.error||!Array.isArray(data.features))throw Error("FAA service returned invalid data");
+    data.metadata={source:"FAA AIS Class Airspace ArcGIS",effective:"Sep 03–Oct 29, 2026",checked:new Date().toISOString(),limited:data.features.length>=2000};
+    return Response.json(data,{headers:{"cache-control":"public,max-age=1800"}});
+   }catch(e){return Response.json({error:"FAA airspace service unavailable",detail:String(e)},{status:502})}
+  }
   if(url.pathname==="/api/weather"){
    const ids=(url.searchParams.get("ids")||"KLCI").toUpperCase().replace(/[^A-Z0-9,]/g,"");
    try{const x=await fetch("https://aviationweather.gov/api/data/metar?ids="+ids+"&format=json");
