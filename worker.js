@@ -1,6 +1,16 @@
 export default {
  async fetch(request, env) {
   const url=new URL(request.url);
+  if(url.pathname==="/api/traffic-debug"){
+   const sources=[["adsb.fi","https://opendata.adsb.fi/api/v3/lat/43.5728/lon/-71.4601/dist/100"],["aviationweather","https://aviationweather.gov/api/data/metar?ids=KLCI&format=json"]];
+   const results=[];
+   for(const [name,target] of sources){
+    const start=Date.now();
+    try{const response=await fetch(target,{headers:{"accept":"application/json"},signal:AbortSignal.timeout(8000)});const body=await response.text();results.push({source:name,status:response.status,elapsed_ms:Date.now()-start,bytes:body.length,preview:body.slice(0,160)});}
+    catch(e){results.push({source:name,error:String(e),elapsed_ms:Date.now()-start});}
+   }
+   return Response.json({results},{headers:{"cache-control":"no-store"}});
+  }
   if(url.pathname==="/api/traffic"){
    const p=url.searchParams;
    const lat=((Number(p.get("lamin"))+Number(p.get("lamax")))/2)||43.5728;
