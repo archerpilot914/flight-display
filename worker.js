@@ -102,6 +102,19 @@ export default {
     return Response.json(data,{headers:{"cache-control":"public,max-age=1800"}});
    }catch(e){return Response.json({error:"FAA airspace service unavailable",detail:String(e)},{status:502})}
   }
+  if(url.pathname==="/api/sua"){
+   const raw=(url.searchParams.get("bbox")||"-74,41,-69,45").split(",").map(Number);
+   if(raw.length!==4||raw.some(x=>!Number.isFinite(x))||raw[0]>=raw[2]||raw[1]>=raw[3]||raw[2]-raw[0]>12||raw[3]-raw[1]>10)return Response.json({error:"Invalid map bounds"},{status:400});
+   const q=new URL("https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Special_Use_Airspace/FeatureServer/0/query");
+   for(const [k,v] of Object.entries({where:"1=1",geometry:raw.join(","),geometryType:"esriGeometryEnvelope",inSR:"4326",spatialRel:"esriSpatialRelIntersects",outFields:"*",returnGeometry:"true",outSR:"4326",f:"geojson",resultRecordCount:"2000"}))q.searchParams.set(k,v);
+   try{
+    const response=await fetch(q.toString(),{headers:{"accept":"application/geo+json"},signal:AbortSignal.timeout(12000)});
+    if(!response.ok)throw Error("FAA SUA HTTP "+response.status);
+    const data=await response.json();if(data.error||!Array.isArray(data.features))throw Error("FAA SUA response invalid");
+    data.metadata={source:"FAA AIS Special Use Airspace",checked:new Date().toISOString(),limited:data.features.length>=2000,notice:"Boundaries only; activation and current restrictions require NOTAM verification"};
+    return Response.json(data,{headers:{"cache-control":"public,max-age=1800"}});
+   }catch(e){return Response.json({error:"FAA SUA unavailable",detail:String(e)},{status:502})}
+  }
   if(url.pathname==="/api/weather"){
    const ids=(url.searchParams.get("ids")||"KLCI").toUpperCase().replace(/[^A-Z0-9,]/g,"");
    try{const x=await fetch("https://aviationweather.gov/api/data/metar?ids="+ids+"&format=json");
