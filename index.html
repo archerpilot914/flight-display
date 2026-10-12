@@ -36,10 +36,60 @@ nav button span{font-size:13px}nav button.active{background:linear-gradient(#168
 .data-card{display:none}
 @media(max-width:1000px){.weather-cell{display:none}.top-cell{min-width:105px;padding:7px 10px}.pill{padding:8px}.status .optional{display:none}nav button span{font-size:11px}}
 @media(max-width:800px){#app{grid-template-rows:58px minmax(0,1fr) 65px}.home-tile{padding:0 9px}.base-cell{display:none}header .top-cell strong{font-size:14px}main{grid-template-columns:1fr}.side{position:absolute;right:8px;top:70px;width:min(310px,65vw);max-height:54vh;z-index:6;background:#051629ed}.map-rail{top:65px}.map-rail button{min-width:45px;min-height:45px;font-size:18px}nav{gap:3px;padding:5px}nav button{font-size:19px}nav button span{display:none}.notice{left:65px;bottom:40px}.airspace-key{left:65px}}
+</style><style>
+/* V2.21 approved cockpit visual direction */
+#app{grid-template-rows:78px minmax(0,1fr) 83px;background:#010915}
+header{border:1px solid #255783;margin:4px 6px 0;border-radius:9px 9px 0 0;background:linear-gradient(180deg,#071a30,#020d1d);overflow:hidden}
+.home-tile{font-size:42px;color:#38b7ff;padding:0 23px}
+.top-cell{min-width:0;flex:1;padding:6px 13px}
+.top-cell strong{font-size:clamp(14px,1.4vw,23px);white-space:nowrap}
+.top-cell span{font-size:clamp(10px,.9vw,14px)}
+.sun-symbol{color:#ffcc24}
+.status{flex:2;min-width:0}.pill{flex:1;justify-content:center;text-align:center;line-height:1.35;font-size:clamp(10px,1vw,15px);white-space:normal}
+.settings-top{font-size:32px;padding:0 17px;background:transparent;border:0;border-left:1px solid #25466a;border-radius:0}
+main{grid-template-columns:minmax(0,1fr) 32.5%;gap:4px;padding:4px 6px 0}
+main>section{min-width:0;border:1px solid #245078;border-radius:5px;overflow:hidden}
+#map{filter:saturate(1.65) contrast(1.18) brightness(.64)}
+.side{border:1px solid #255784;border-radius:6px;padding:5px;display:flex;flex-direction:column;gap:5px;overflow:hidden;background:#03101f}
+.card{margin:0;border-radius:7px;padding:9px;background:linear-gradient(120deg,#071e39,#020d1c)}
+.selected-card{flex:0 0 auto;min-height:44%;border-top:1px solid #295f91}
+.selected-head{display:flex;align-items:center;gap:12px}
+.selected-head .big{margin:0;font-size:clamp(17px,1.7vw,27px)}
+.star{font-size:27px;color:#ffce20}
+.aircraft-silhouette{margin-left:auto;color:#c5e7ff;font-size:37px;transform:rotate(-20deg)}
+.route-line{display:flex;justify-content:space-between;align-items:center;margin:12px 0;padding:8px 2px;border-bottom:1px solid #315779}
+.route-line strong{font-size:clamp(16px,1.6vw,26px)}.route-line span{color:#2da8ff;letter-spacing:2px}
+.selected-card .row{margin-top:0;padding:5px 0;border:0;font-size:clamp(11px,.9vw,14px)}
+.selected-card .row span{color:#a8bfd6}
+.selected-card .row b{color:#f1f9ff}
+.action-row{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:12px}
+.action-row button{padding:10px 2px;font-size:clamp(10px,.85vw,13px);border-radius:6px;white-space:nowrap}
+.action-row button:first-child{background:#0879f6;border-color:#269bff}
+.traffic-list{flex:1;min-height:0;display:flex;flex-direction:column}
+.list-heading strong{font-size:14px;background:#0a3158;border:1px solid #399cff;border-radius:5px;padding:7px}
+.table-header{display:grid;grid-template-columns:1fr 56px 70px 48px;color:#a2bcd6;font-size:11px;padding:8px 3px 4px;border-bottom:1px solid #34587c}
+.nearby-rows{flex:1;max-height:none;overflow:auto}
+.nearby-item{grid-template-columns:20px minmax(0,1fr) 70px 52px;gap:3px;padding:7px 3px}
+.nearby-item .flight-sub{font-size:9px}
+.map-rail{top:100px;left:10px;gap:6px}
+.map-rail button{width:68px;min-height:66px;font-size:27px;border-radius:8px;background:#04162bdc}
+.map-rail small{font-size:11px}.map-rail button.active{background:#08294b}
+.compass-rose{position:absolute;top:12px;left:14px;z-index:6;width:67px;height:67px;background:#041a30ed;border:1px solid #255883;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#ff5252;font-size:28px;flex-direction:column}
+.compass-rose small{position:absolute;top:3px;color:#fff;font-size:12px}
+.range-key{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);z-index:5;background:#04182acb;color:#66baff;font-size:11px;border-radius:7px;padding:6px 10px;white-space:nowrap}
+.aviation-tools{top:10px;right:10px;display:flex;gap:4px}
+.aviation-tools button{font-size:11px;padding:7px;background:#061a31eb}
+.airspace-key{display:none}.notice{bottom:44px;left:88px;max-width:60%;font-size:10px;opacity:.82}
+.plane{font-size:30px;filter:drop-shadow(0 2px 2px #000);font-weight:900}
+nav{margin:0 6px 5px;border:1px solid #245883;border-radius:0 0 10px 10px;padding:8px;gap:8px}
+nav button{font-size:31px}nav button span{font-size:clamp(11px,1.1vw,17px)}
+.search-card{display:none}
+@media(max-width:1100px){.wind-cell{display:none}.home-tile{padding:0 12px}.top-cell{padding:6px 8px}.selected-card{min-height:42%}.map-rail button{width:52px;min-height:52px;font-size:22px}.map-rail small{font-size:9px}.map-rail{top:88px}}
+@media(max-width:800px){#app{grid-template-rows:57px minmax(0,1fr) 64px}.top-cell{flex:1}.status{flex:1}.status .pill:not(:first-child){display:none}.settings-top{display:none}.home-tile{font-size:27px;padding:0 8px}.side{position:absolute;right:7px;top:65px;width:min(320px,62vw);height:auto;max-height:67vh;overflow:auto;z-index:6}.selected-card{min-height:0}.traffic-list{max-height:25vh}.map-rail{top:75px;left:8px}.map-rail button{width:43px;min-height:45px;font-size:18px}.map-rail small{font-size:8px}.compass-rose{width:44px;height:44px;font-size:20px}.notice{left:56px;bottom:43px}.range-key{font-size:9px}.route-line{margin:4px 0}.action-row{margin-top:5px}.selected-card .row{padding:3px 0}}
 </style></head>
-<body><div id="app"><header><div class="home-tile" title="Flight Display">⌂</div><div class="top-cell"><strong id="clockTime">--:--</strong><span id="clock">Loading time</span></div><div class="top-cell base-cell"><strong>📍 KLCI</strong><span>Laconia, NH</span></div><div class="top-cell weather-cell"><strong>⛅ Weather</strong><span>METAR on map</span></div><div class="status"><span class="pill" id="trafficStatus">◉ ADS-B: connecting…</span><span class="pill ok">◉ Internet mode</span><span class="pill optional">⌖ GPS: not connected</span><span class="pill optional">⚙</span></div></header><main><section style="position:relative"><div id="map"></div><div class="airspace-key" id="airspaceStatus">AIRSPACE: FAA data pending • overlay OFF</div><div class="map-rail"><button id="railLayers" title="Toggle airspace">▱<small>Layers</small></button><button id="railAll" class="active" title="All aircraft">✈<small>All</small></button><button id="railCommercial" title="Commercial aircraft">✈<small>Airliners</small></button><button id="railGA" title="General aviation">✈<small>GA</small></button></div><div class="aviation-tools"><button id="airspaceToggle" type="button" aria-pressed="false">Airspace OFF</button> <button id="airportToggle" type="button" aria-pressed="true">✈ Airports ON</button></div><div class="notice" id="diag">BUILD V2.20 • MAP: starting • TRAFFIC: waiting</div></section><aside class="side"><div class="card selected-card"><div class="muted">★ SELECTED AIRCRAFT</div><div class="big" id="callsign">Select an aircraft</div><div class="muted" id="selectionHint">Tap an aircraft on the map or in the nearby list</div><div class="row"><span>Altitude</span><b id="alt">—</b></div><div class="row"><span>Ground speed</span><b id="spd">—</b></div><div class="row"><span>Heading</span><b id="hdg">—</b></div><div class="row"><span>ICAO24</span><b id="icao">—</b></div></div><div class="card traffic-list"><div class="list-heading"><strong id="nearbyTitle">Nearby Aircraft (0)</strong><span id="trafficAge">Waiting for data</span></div><div id="nearbyRows" class="nearby-rows"><div class="muted">No aircraft data received yet</div></div></div><div class="card search-card"><div class="muted">SEARCH VISIBLE TRAFFIC</div><input class="search" id="search" placeholder="DAL123 or N123AB"><div id="results" class="muted" style="margin-top:9px"></div></div><div class="card data-card"><div class="muted">DATA DESIGN</div><div style="margin-top:6px">OpenSky trial: anonymous data is cached for 5 minutes to respect API credits. The map center controls the region. A local Raspberry Pi ADS-B receiver will eventually supply faster nearby updates.</div></div></aside></main><nav><button class="active" onclick="showPanel('traffic')">✈ <span>Traffic</span></button><button onclick="document.getElementById('search').focus()">⌕ <span>Search Flight</span></button><button onclick="showPanel('airports')">▥ <span>Airports</span></button><button onclick="showPanel('weather')">☁ <span>Weather</span></button><button onclick="document.getElementById('railLayers').click()">▱ <span>Layers</span></button><button onclick="showPanel('settings')">⚙ <span>Settings</span></button></nav></div>
+<body><div id="app"><header><div class="home-tile" title="Flight Display">⌂</div><div class="top-cell"><strong id="clockTime">--:--</strong><span id="clock">Loading time</span></div><div class="top-cell base-cell"><strong>📍 KLCI</strong><span>Laconia, NH</span></div><div class="top-cell weather-cell"><strong><span class="sun-symbol">☀</span> <span id="topTemp">—°F</span></strong><span id="topConditions">Weather loading</span></div><div class="top-cell wind-cell"><strong id="topWind">Wind —</strong><span id="topVis">Vis — • Alt —</span></div><div class="status"><span class="pill" id="trafficStatus">♧ ADS-B<br>Connecting…</span><span class="pill ok">◉ Internet<br>Connected</span><span class="pill gps-pill">✣ GPS<br>Not connected</span><button class="settings-top" onclick="showPanel('settings')" aria-label="Settings">⚙</button></div></header><main><section style="position:relative"><div id="map"></div><div class="airspace-key" id="airspaceStatus">AIRSPACE: FAA data pending • overlay OFF</div><div class="compass-rose">▲<small>N</small></div><div class="map-rail"><button id="railLayers" title="Toggle airspace">▱<small>Layers</small></button><button id="railAll" class="active" title="All aircraft">✈<small>All</small></button><button id="railCommercial" title="Commercial aircraft">✈<small>Commercial</small></button><button id="railGA" title="General aviation">✈<small>GA</small></button><button id="railMilitary" title="Military aircraft">✈<small>Military</small></button><button id="railHeli" title="Helicopters">🚁<small>Helicopter</small></button></div><div class="range-key">◉ KLCI <span id="rangeDistance">Range rings: 5 · 10 · 25 NM</span></div><div class="aviation-tools"><button id="airspaceToggle" type="button" aria-pressed="false">Airspace OFF</button> <button id="airportToggle" type="button" aria-pressed="true">✈ Airports ON</button></div><div class="notice" id="diag">BUILD V2.21 • MAP: starting • TRAFFIC: waiting</div></section><aside class="side"><div class="card selected-card"><div class="selected-head"><span class="star">★</span><div><div class="big" id="callsign">Select aircraft</div><div class="muted" id="airline">Tap a plane on the map</div></div><div class="aircraft-silhouette">✈</div></div><div class="route-line"><strong id="routeFrom">—</strong><span>━━ ✈ ━━</span><strong id="routeTo">—</strong></div><div class="muted" id="selectionHint">Tap an aircraft on the map or in the nearby list</div><div class="row"><span>Altitude</span><b id="alt">—</b></div><div class="row"><span>Ground speed</span><b id="spd">—</b></div><div class="row"><span>Heading</span><b id="hdg">—</b></div><div class="row"><span>ICAO24</span><b id="icao">—</b></div><div class="row"><span>Source</span><b id="sourceName">Awaiting feed</b></div><div class="action-row"><button id="followBtn">⊕ Follow</button><button id="routeBtn">☷ Show Route</button><button id="infoBtn">ⓘ More Info</button></div></div><div class="card traffic-list"><div class="list-heading"><strong id="nearbyTitle">Nearby Aircraft (0)</strong><span id="trafficAge">Waiting for data</span></div><div class="table-header"><span>Callsign</span><span>Type</span><span>Alt</span><span>Spd</span></div><div id="nearbyRows" class="nearby-rows"><div class="muted">No aircraft data received yet</div></div></div><div class="card search-card"><div class="muted">SEARCH VISIBLE TRAFFIC</div><input class="search" id="search" placeholder="DAL123 or N123AB"><div id="results" class="muted" style="margin-top:9px"></div></div><div class="card data-card"><div class="muted">DATA DESIGN</div><div style="margin-top:6px">OpenSky trial: anonymous data is cached for 5 minutes to respect API credits. The map center controls the region. A local Raspberry Pi ADS-B receiver will eventually supply faster nearby updates.</div></div></aside></main><nav><button class="active" onclick="showPanel('traffic')">✈ <span>Traffic</span></button><button onclick="document.getElementById('search').focus()">⌕ <span>Search Flight</span></button><button onclick="showPanel('airports')">▥ <span>Airports</span></button><button onclick="showPanel('weather')">☁ <span>Weather</span></button><button onclick="document.getElementById('railLayers').click()">▱ <span>Layers</span></button><button onclick="showPanel('settings')">⚙ <span>Settings</span></button></nav></div>
 <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.2/dist/maplibre-gl.js"></script><script>
-const E=id=>document.getElementById(id);const D=(m)=>{if(E('diag'))E('diag').textContent='BUILD V2.20 • '+m};window.addEventListener('error',e=>D('JS ERROR: '+e.message));D('MAP ENGINE: loaded • TRAFFIC: waiting');const map=new maplibregl.Map({container:'map',center:[-71.46,43.57],zoom:7.2,style:'https://tiles.openfreemap.org/styles/liberty'});map.addControl(new maplibregl.NavigationControl(),'top-left');
+const E=id=>document.getElementById(id);const D=(m)=>{if(E('diag'))E('diag').textContent='BUILD V2.21 • '+m};window.addEventListener('error',e=>D('JS ERROR: '+e.message));D('MAP ENGINE: loaded • TRAFFIC: waiting');const map=new maplibregl.Map({container:'map',center:[-71.46,43.57],zoom:7.2,style:'https://tiles.openfreemap.org/styles/liberty'});map.addControl(new maplibregl.NavigationControl(),'bottom-left');
 function applyAviationTheme(){
  const layers=map.getStyle()?.layers||[];
  for(const layer of layers){
@@ -59,7 +109,7 @@ function applyAviationTheme(){
   }catch(e){console.warn('Map theme layer skipped',layer.id,e)}
  }
 }
-map.on('style.load',applyAviationTheme);map.on('load',()=>D('MAP: loaded • TRAFFIC: requesting'));map.on('error',e=>D('MAP ERROR: '+(e.error?.message||'tile/style failed')));let markers=[],aircraft=[];let airspaceVisible=false;let classEVisible=false;let airspaceRequest=0;
+map.on('style.load',()=>{applyAviationTheme();addRangeRings()});map.on('load',()=>D('MAP: loaded • TRAFFIC: requesting'));map.on('error',e=>D('MAP ERROR: '+(e.error?.message||'tile/style failed')));let markers=[],aircraft=[];let airspaceVisible=false;let classEVisible=false;let airspaceRequest=0;
 async function refreshAirspace(){
  if(!airspaceVisible||!map.isStyleLoaded())return;
  const bounds=map.getBounds(),box=[bounds.getWest(),bounds.getSouth(),bounds.getEast(),bounds.getNorth()].map(n=>Number(n.toFixed(4)));
@@ -86,8 +136,8 @@ E('airspaceToggle').addEventListener('click',()=>{
 });
 map.on('moveend',()=>{if(airspaceVisible)refreshAirspace()});
 const airports=[['KLCI',-71.4189,43.5727],['KCON',-71.5023,43.2027],['KMHT',-71.4357,42.9326],['KASH',-71.5148,42.7817],['KPSM',-70.8233,43.0779],['KLEB',-72.3042,43.6261]];let airportsVisible=true;const airportDots={};function addAirportPins(){airports.forEach(([id,lon,lat])=>{const e=document.createElement('div');e.className='airport-pin';e.innerHTML='<span class="symbol" title="Weather unavailable"></span><span class="ident">'+id+'</span>';airportDots[id]=e.querySelector('.symbol');new maplibregl.Marker({element:e,anchor:'bottom'}).setLngLat([lon,lat]).addTo(map)});loadAirportWeather()}async function loadAirportWeather(){try{const r=await fetch('/api/weather?ids='+airports.map(a=>a[0]).join(','));if(!r.ok)throw Error(String(r.status));const data=await r.json();if(!Array.isArray(data))return;for(const m of data){const id=(m.icaoId||m.stationId||'').toUpperCase(),dot=airportDots[id];if(!dot)continue;const category=String(m.fltCat||m.flightCategory||'').toUpperCase();dot.className='symbol'+({VFR:' vfr',MVFR:' mvfr',IFR:' ifr',LIFR:' lifr'}[category]||'');dot.title=id+' • '+(category||'Weather unavailable')}}catch(e){console.warn('Airport weather unavailable',e)}}E('airportToggle').addEventListener('click',()=>{airportsVisible=!airportsVisible;E('airportToggle').textContent=airportsVisible?'● Weather ON':'● Weather OFF';E('airportToggle').setAttribute('aria-pressed',String(airportsVisible));E('map').classList.toggle('aviation-off',!airportsVisible)});E('airportToggle').textContent='● Weather ON';map.on('load',addAirportPins);setInterval(loadAirportWeather,300000);
-function select(a){E("selectionHint").textContent="Live feed aircraft • "+(a[2]||"origin unknown");E('callsign').textContent=(a[1]||'UNKNOWN').trim()||'UNKNOWN';E('icao').textContent=a[0]||'—';E('alt').textContent=a[7]!=null?Math.round(a[7]*3.28084).toLocaleString()+' ft':'—';E('spd').textContent=a[9]!=null?Math.round(a[9]*1.94384)+' kt':'—';E('hdg').textContent=a[10]!=null?Math.round(a[10])+'°':'—'}
-function render(d){markers.forEach(m=>m.remove());markers=[];aircraft=(d.states||[]).filter(a=>a[5]!=null&&a[6]!=null);aircraft.forEach(a=>{let e=document.createElement('div');e.className='plane';e.textContent='✈';e.style.transform='rotate('+(a[10]||0)+'deg)';e.style.color=a[8]?'#ffb02e':'#50e6ff';e.onclick=()=>select(a);markers.push(new maplibregl.Marker({element:e}).setLngLat([a[5],a[6]]).addTo(map))});E('trafficStatus').textContent='ADS-B: '+aircraft.length+' aircraft';updateNearby();doSearch()}
+let selectedAircraft=null;function select(a){selectedAircraft=a;E('airline').textContent='ICAO24 '+(a[0]||'—');E('sourceName').textContent='Internet aircraft feed';E("selectionHint").textContent="Live feed aircraft • "+(a[2]||"origin unknown");E('callsign').textContent=(a[1]||'UNKNOWN').trim()||'UNKNOWN';E('icao').textContent=a[0]||'—';E('alt').textContent=a[7]!=null?Math.round(a[7]*3.28084).toLocaleString()+' ft':'—';E('spd').textContent=a[9]!=null?Math.round(a[9]*1.94384)+' kt':'—';E('hdg').textContent=a[10]!=null?Math.round(a[10])+'°':'—';E('routeFrom').textContent='—';E('routeTo').textContent='—'}
+function render(d){markers.forEach(m=>m.remove());markers=[];aircraft=(d.states||[]).filter(a=>a[5]!=null&&a[6]!=null);aircraft.forEach(a=>{let e=document.createElement('div');e.className='plane';e.textContent='✈';e.style.transform='rotate('+(a[10]||0)+'deg)';e.style.color=(a[7]!=null&&a[7]<3000)?'#57ff75':(a[7]!=null&&a[7]>8000)?'#ffd32a':'#44caff';e.title=((a[1]||a[0]||'Aircraft').trim())+' • '+(a[7]!=null?Math.round(a[7]*3.28084).toLocaleString()+' ft':'altitude unknown');e.onclick=()=>select(a);markers.push(new maplibregl.Marker({element:e}).setLngLat([a[5],a[6]]).addTo(map))});E('trafficStatus').innerHTML='♧ ADS-B<br>'+aircraft.length+' aircraft';updateNearby();doSearch()}
 let trafficRequestId=0;
 async function loadTraffic(){
  const requestId=++trafficRequestId;
@@ -102,22 +152,22 @@ async function loadTraffic(){
   const age=data.time?Math.max(0,Math.round(Date.now()/1000-data.time)):null;
   const ageLabel=age===null?'time unknown':age+'s old';
   D('MAP: loaded • OPENSKY: '+data.states.length+' aircraft • '+ageLabel+' • '+(data.authenticated?'authenticated':'anonymous / cached'));
-  E('trafficStatus').textContent='ADS-B: '+data.states.length+' • '+ageLabel;E('trafficAge').textContent=ageLabel;
+  E('trafficStatus').innerHTML='♧ ADS-B<br>'+data.states.length+' aircraft';E('trafficAge').textContent=ageLabel;
   E('trafficStatus').style.color=age!==null&&age>360?'#ffb02e':'#7dff8a';
  }catch(e){
   if(requestId!==trafficRequestId)return;
   render({states:[]});
   D('OPENSKY: unavailable • '+e.message);
-  E('trafficStatus').textContent='ADS-B: unavailable';E('trafficAge').textContent='Feed unavailable';
+  E('trafficStatus').innerHTML='♧ ADS-B<br>Unavailable';E('trafficAge').textContent='Feed unavailable';
   E('trafficStatus').style.color='#ffb02e';
  }
 }
 function doSearch(){let q=E('search').value.trim().toUpperCase(),f=aircraft.filter(a=>(a[1]||'').trim().toUpperCase().includes(q)||a[0].toUpperCase().includes(q)).slice(0,8);E('results').innerHTML=q?(f.length?f.map((a,i)=>'<div data-i="'+i+'" style="padding:8px;border-bottom:1px solid #29435f"><b>'+((a[1]||'UNKNOWN').trim())+'</b> • '+a[0]+'</div>').join(''):'No visible match'):(aircraft.length+' aircraft loaded');[...E('results').children].forEach((x,i)=>x.onclick=()=>{select(f[i]);map.flyTo({center:[f[i][5],f[i][6]],zoom:9})})}
-E('search').addEventListener('input',doSearch);map.on('load',loadTraffic);map.on('moveend',loadTraffic);setInterval(loadTraffic,60000);setInterval(()=>{const n=new Date();E('clockTime').textContent=n.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});E('clock').textContent=n.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric',year:'numeric'});},1000);async function showPanel(which){if(which==='traffic'){E('callsign').textContent='Select an aircraft';E('selectionHint').textContent='Tap an aircraft on the map or in the nearby list';}if(which==='airports'){E('callsign').textContent='AIRPORTS';E('icao').textContent='KLCI';E('alt').textContent='Laconia, NH';E('spd').textContent='Nearby: KCON';E('hdg').textContent='Tap Weather for METAR';}if(which==='weather'){E('callsign').textContent='KLCI WEATHER';try{let r=await fetch('/api/weather?ids=KLCI');let d=await r.json();let m=Array.isArray(d)?d[0]:null;E('icao').textContent=m?.rawOb||'Weather unavailable';E('alt').textContent=m?.temp!=null?m.temp+'°C':'—';E('spd').textContent=m?.wspd!=null?m.wspd+' kt':'—';E('hdg').textContent=m?.wdir!=null?m.wdir+'°':'—';}catch(e){E('icao').textContent='Weather unavailable'}}if(which==='settings'){E('callsign').textContent='SETTINGS';E('icao').textContent='Internet mode';E('alt').textContent='KLCI home area';E('spd').textContent='15 sec refresh';E('hdg').textContent='Pi ADS-B later';}}if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js');
+E('search').addEventListener('input',doSearch);map.on('load',loadTraffic);map.on('moveend',loadTraffic);setInterval(loadTraffic,60000);setInterval(()=>{const n=new Date();E('clockTime').textContent=n.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});E('clock').textContent=n.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric',year:'numeric'});},1000);async function showPanel(which){if(which==='traffic'){E('callsign').textContent='Select an aircraft';E('selectionHint').textContent='Tap an aircraft on the map or in the nearby list';}if(which==='airports'){E('callsign').textContent='AIRPORTS';E('icao').textContent='KLCI';E('alt').textContent='Laconia, NH';E('spd').textContent='Nearby: KCON';E('hdg').textContent='Tap Weather for METAR';}if(which==='weather'){E('callsign').textContent='KLCI WEATHER';try{let r=await fetch('/api/weather?ids=KLCI');let d=await r.json();let m=Array.isArray(d)?d[0]:null;E('icao').textContent=m?.rawOb||'Weather unavailable';E('alt').textContent=m?.temp!=null?m.temp+'°C':'—';E('spd').textContent=m?.wspd!=null?m.wspd+' kt':'—';E('hdg').textContent=m?.wdir!=null?m.wdir+'°':'—';}catch(e){E('icao').textContent='Weather unavailable'}}if(which==='settings'){E('callsign').textContent='SETTINGS';E('icao').textContent='Internet mode';E('alt').textContent='KLCI home area';E('spd').textContent='15 sec refresh';E('hdg').textContent='Pi ADS-B later';}}E('followBtn').onclick=()=>{if(selectedAircraft)map.flyTo({center:[selectedAircraft[5],selectedAircraft[6]],zoom:10})};E('routeBtn').onclick=()=>{E('selectionHint').textContent='Route data not available from current feed'};E('infoBtn').onclick=()=>{E('selectionHint').textContent=selectedAircraft?'ICAO24: '+selectedAircraft[0]+' • Country: '+(selectedAircraft[2]||'Unknown'):'Select an aircraft first'};if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js');
 </script><script>
 let railFilter='all';
 function updateNearby(){
- const filtered=aircraft.filter(a=>railFilter==='all'||(railFilter==='commercial'?((a[1]||'').trim().match(/^[A-Z]{3}[0-9]/)):((a[1]||'').trim().match(/^N[0-9]/))));
+ const filtered=aircraft.filter(a=>railFilter==='all'||(railFilter==='commercial'?/^[A-Z]{3}[0-9]/.test((a[1]||'').trim()):railFilter==='ga'?/^N[0-9]/.test((a[1]||'').trim()):false));
  E('nearbyTitle').textContent='Nearby Aircraft ('+filtered.length+')';
  const root=E('nearbyRows');root.replaceChildren();
  if(!filtered.length){const empty=document.createElement('div');empty.className='muted';empty.style.padding='12px 3px';empty.textContent=aircraft.length?'No matching aircraft in this filter':'No aircraft data received yet';root.append(empty);return}
@@ -130,6 +180,28 @@ function updateNearby(){
  btn.append(symbol,info,alt,speed);btn.onclick=()=>{select(a);map.flyTo({center:[a[5],a[6]],zoom:9})};root.append(btn)
  }
 }
-for(const [id,filter] of [['railAll','all'],['railCommercial','commercial'],['railGA','ga']])E(id).onclick=()=>{railFilter=filter;for(const k of ['railAll','railCommercial','railGA'])E(k).classList.toggle('active',k===id);updateNearby()};
+for(const [id,filter] of [['railAll','all'],['railCommercial','commercial'],['railGA','ga'],['railMilitary','military'],['railHeli','heli']])E(id).onclick=()=>{railFilter=filter;for(const k of ['railAll','railCommercial','railGA','railMilitary','railHeli'])E(k).classList.toggle('active',k===id);updateNearby()};
 E('railLayers').onclick=()=>E('airspaceToggle').click();
+</script><script>
+function addRangeRings(){
+ if(!map.isStyleLoaded())return;
+ const origin=[-71.4189,43.5727],rings=[];
+ for(const nm of [5,10,25]){
+ const coords=[];
+ for(let i=0;i<=120;i++){const angle=i*Math.PI*2/120;const lat=origin[1]+nm/60*Math.cos(angle);const lon=origin[0]+nm/(60*Math.cos(origin[1]*Math.PI/180))*Math.sin(angle);coords.push([lon,lat])}
+ rings.push({type:'Feature',properties:{nm},geometry:{type:'LineString',coordinates:coords}})
+ }
+ const data={type:'FeatureCollection',features:rings};
+ if(map.getSource('range-rings'))map.getSource('range-rings').setData(data);
+ else{map.addSource('range-rings',{type:'geojson',data});map.addLayer({id:'range-rings-line',type:'line',source:'range-rings',paint:{'line-color':'#d4e7ee','line-opacity':.6,'line-dasharray':[3,3],'line-width':1.25}})}
+}
+async function updateTopWeather(){
+ try{const r=await fetch('/api/weather?ids=KLCI');if(!r.ok)return;const d=await r.json();const m=Array.isArray(d)?d[0]:null;if(!m)return;
+ if(Number.isFinite(Number(m.temp)))E('topTemp').textContent=Math.round(Number(m.temp)*9/5+32)+'°F';
+ E('topConditions').textContent=m.fltCat?m.fltCat+' conditions':'KLCI METAR';
+ E('topWind').textContent='Wind '+(m.wdir!=null?m.wdir+'°':'—')+' @ '+(m.wspd??'—')+' kt';
+ E('topVis').textContent='Vis '+(m.visib??'—')+' SM • Alt '+(m.altim??'—');
+ }catch(e){console.warn('Top weather',e)}
+}
+updateTopWeather();setInterval(updateTopWeather,300000);
 </script></body></html>
