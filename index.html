@@ -291,8 +291,8 @@ ringButton.addEventListener('click',()=>{
  ringMode='gps';ringButton.textContent='◉ GPS: locating…';
  setRingStatus('Waiting for device location permission…');
  gpsWatchId=navigator.geolocation.watchPosition(updateGpsRingPosition,error=>{
-  setRingStatus(error.code===1?'Location permission denied — KLCI rings restored':'GPS unavailable — KLCI rings restored');
   stopGpsRings();
+  setRingStatus(error.code===1?'Location permission denied — KLCI rings restored':'GPS unavailable — KLCI rings restored');
  },{enableHighAccuracy:true,maximumAge:5000,timeout:15000});
 });
 </script></body></html>
