@@ -65,7 +65,7 @@ async function loadTraffic(){
   render(data);
   const age=data.time?Math.max(0,Math.round(Date.now()/1000-data.time)):null;
   const ageLabel=age===null?'time unknown':age+'s old';
-  D('BUILD FEED: OpenSky • '+data.states.length+' aircraft • '+ageLabel+' • '+(data.authenticated?'authenticated':'anonymous / cached'));
+  D('MAP: loaded • OPENSKY: '+data.states.length+' aircraft • '+ageLabel+' • '+(data.authenticated?'authenticated':'anonymous / cached'));
   E('trafficStatus').textContent='OPENSKY: '+data.states.length+' • '+ageLabel;
   E('trafficStatus').style.color=age!==null&&age>360?'#ffb02e':'#7dff8a';
  }catch(e){
