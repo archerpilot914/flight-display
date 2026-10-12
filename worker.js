@@ -1,3 +1,4 @@
+let openskyToken="",openskyTokenExpiresAt=0;
 export default {
  async fetch(request, env) {
   const url=new URL(request.url);
@@ -22,27 +23,59 @@ export default {
    }catch(e){return Response.json({provider:"adsb.lol",error:String(e),elapsed_ms:Date.now()-started},{headers:{"cache-control":"no-store"}});}
   }
   if(url.pathname==="/api/traffic"){
+   // OpenSky trial. The map center (not a fixed NH location) controls the coverage.
    const p=url.searchParams;
-   const lat=((Number(p.get("lamin"))+Number(p.get("lamax")))/2)||43.5728;
-   const lon=((Number(p.get("lomin"))+Number(p.get("lomax")))/2)||-71.4601;
-   const normalize=a=>[a.hex||"",a.flight||a.r||"",null,null,null,a.lon,a.lat,typeof a.alt_baro==="number"?a.alt_baro/3.28084:null,a.alt_baro==="ground",typeof a.gs==="number"?a.gs/1.94384:null,a.track||0,null,null,null,null,null,null];
-   const attempts=[];
-   for(const src of [
-    ["adsb.fi","https://opendata.adsb.fi/api/v3/lat/"+lat+"/lon/"+lon+"/dist/100"],
-    ["airplanes.live","https://api.airplanes.live/v2/point/"+lat+"/"+lon+"/100"],
-    ["adsb.lol","https://api.adsb.lol/v2/point/"+lat+"/"+lon+"/100"]
-   ]){
-    try{
-     const x=await fetch(src[1],{headers:{"accept":"application/json"}});
-     attempts.push(src[0]+":"+x.status);
-     if(!x.ok) continue;
-     const d=await x.json();
-     const raw=d.ac||d.aircraft||[];
-     const states=raw.filter(a=>a.lat!=null&&a.lon!=null).map(normalize);
-     return Response.json({time:Math.floor(Date.now()/1000),states,source:src[0],attempts},{headers:{"cache-control":"public,max-age=5"}});
-    }catch(e){attempts.push(src[0]+":fetch-failed")}
+   const numbers=["lamin","lamax","lomin","lomax"].map(key=>Number(p.get(key)));
+   if(numbers.some(v=>!Number.isFinite(v))||numbers[0]<-90||numbers[1]>90||numbers[2]<-180||numbers[3]>180||numbers[0]>=numbers[1]||numbers[2]>=numbers[3]){
+    return Response.json({error:"Invalid geographic bounds",source:"OpenSky"},{status:400});
    }
-   return Response.json({states:[],error:"all traffic sources failed",attempts},{status:502});
+   // Quantize center to a half-degree grid so map movements reuse cached responses.
+   const centerLat=Math.round(((numbers[0]+numbers[1])/2)*2)/2;
+   const centerLon=Math.round(((numbers[2]+numbers[3])/2)*2)/2;
+   const lowerLat=Math.max(-90,centerLat-1.25),upperLat=Math.min(90,centerLat+1.25);
+   const lowerLon=Math.max(-180,centerLon-1.75),upperLon=Math.min(180,centerLon+1.75);
+   const authorized=Boolean(env.OPENSKY_CLIENT_ID&&env.OPENSKY_CLIENT_SECRET);
+   // Anonymous 400-credit allowance: at most 288 requests/day per cached area.
+   const ttl=authorized?60:300;
+   const cacheKey=new Request(url.origin+"/api/traffic-cache?lat="+centerLat+"&lon="+centerLon+"&auth="+Number(authorized));
+   const store=caches.default;
+   const cached=await store.match(cacheKey);
+   if(cached)return cached;
+   const apiUrl=new URL("https://opensky-network.org/api/states/all");
+   for(const [key,value] of [["lamin",lowerLat],["lamax",upperLat],["lomin",lowerLon],["lomax",upperLon]])apiUrl.searchParams.set(key,String(value));
+   const headers={"accept":"application/json"};
+   try{
+    if(authorized){
+     if(!openskyToken||Date.now()>openskyTokenExpiresAt){
+      const form=new URLSearchParams({grant_type:"client_credentials",client_id:env.OPENSKY_CLIENT_ID,client_secret:env.OPENSKY_CLIENT_SECRET});
+      const tokenResponse=await fetch("https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token",{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded"},body:form.toString(),signal:AbortSignal.timeout(10000)});
+      if(!tokenResponse.ok)throw Error("OpenSky OAuth token request HTTP "+tokenResponse.status);
+      const token=await tokenResponse.json();
+      if(!token.access_token)throw Error("OpenSky OAuth token was missing");
+      openskyToken=token.access_token;
+      openskyTokenExpiresAt=Date.now()+Math.max(60,Number(token.expires_in||1800)-90)*1000;
+     }
+     headers.authorization="Bearer "+openskyToken;
+    }
+    const response=await fetch(apiUrl.toString(),{headers,signal:AbortSignal.timeout(12000)});
+    if(!response.ok){
+     if(response.status===401)openskyToken="";
+     const error=response.status===403?"OpenSky denied requests from this server":response.status===429?"OpenSky rate limit reached":"OpenSky HTTP "+response.status;
+     const denied=Response.json({source:"OpenSky",error,upstream_status:response.status,retry_after:response.headers.get("x-rate-limit-retry-after-seconds")||response.headers.get("retry-after")||null,authenticated:authorized,states:[]},{status:response.status===429?429:502,headers:{"cache-control":"public,max-age=60"}});
+     await store.put(cacheKey,denied.clone());
+     return denied;
+    }
+    const data=await response.json();
+    if(!Array.isArray(data.states))throw Error("OpenSky did not return an aircraft states array");
+    const states=data.states.filter(a=>Array.isArray(a)&&Number.isFinite(a[5])&&Number.isFinite(a[6]));
+    const output=Response.json({source:"OpenSky",authenticated:authorized,time:data.time||null,states,checked_at:new Date().toISOString(),refresh_seconds:ttl,coverage_center:[centerLon,centerLat],credits_remaining:response.headers.get("x-rate-limit-remaining")},{headers:{"cache-control":"public,max-age="+ttl}});
+    await store.put(cacheKey,output.clone());
+    return output;
+   }catch(error){
+    const unavailable=Response.json({source:"OpenSky",error:String(error),states:[]},{status:502,headers:{"cache-control":"public,max-age=60"}});
+    await store.put(cacheKey,unavailable.clone());
+    return unavailable;
+   }
   }
   if(url.pathname==="/api/airspace"){
    const raw=(url.searchParams.get("bbox")||"-74,41,-69,45").split(",").map(Number);
