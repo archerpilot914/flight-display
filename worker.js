@@ -22,6 +22,16 @@ export default {
     return Response.json({provider:"adsb.lol",status:response.status,elapsed_ms:Date.now()-started,bytes:body.length,aircraft_count:count,preview:body.slice(0,160)},{headers:{"cache-control":"no-store"}});
    }catch(e){return Response.json({provider:"adsb.lol",error:String(e),elapsed_ms:Date.now()-started},{headers:{"cache-control":"no-store"}});}
   }
+  if(url.pathname==="/api/opensky-diagnostic"){
+   const started=Date.now();
+   const target="https://opensky-network.org/api/states/all?lamin=43.2&lamax=43.8&lomin=-71.9&lomax=-71.0";
+   try{
+    const response=await fetch(target,{headers:{"accept":"application/json"},signal:AbortSignal.timeout(20000)});
+    const raw=await response.text();
+    let count=null;try{count=JSON.parse(raw).states?.length??null}catch(e){}
+    return Response.json({provider:"OpenSky",http_status:response.status,elapsed_ms:Date.now()-started,aircraft_count:count,content_type:response.headers.get("content-type"),preview:response.ok?null:raw.slice(0,180)},{headers:{"cache-control":"no-store"}});
+   }catch(e){return Response.json({provider:"OpenSky",error:String(e),elapsed_ms:Date.now()-started},{headers:{"cache-control":"no-store"}})}
+  }
   if(url.pathname==="/api/traffic"){
    // OpenSky trial. The map center (not a fixed NH location) controls the coverage.
    const p=url.searchParams;
