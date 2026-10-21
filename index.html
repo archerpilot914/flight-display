@@ -214,5 +214,7 @@ if(navigator.geolocation&&cfg.lat==null){
 }else $("sG").textContent=cfg.lat!=null?"Manual":"Unsupported";
 const tick=()=>{const d=new Date();$("clk").textContent=d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});$("dt").textContent=d.toLocaleDateString([],{weekday:"short",month:"short",day:"numeric",year:"numeric"});
  $("sI").className=navigator.onLine?"ok":"bad";$("sI").textContent=navigator.onLine?"Connected":"Offline"};
-tick();setInterval(tick,1000);
+tick();setInterval(tick,600000);
 renderSel();renderView();load();loadWx();sched();setInterval(loadWx,60
+600000);
+</script></body></html>
