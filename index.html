@@ -85,12 +85,14 @@ const routeCache=new Map();
 const rad=x=>x*Math.PI/180;
 const dist=(a,b,c,d)=>{const p=rad(c-a),r=rad(d-b),x=Math.sin(p/2)**2+Math.cos(rad(a))*Math.cos(rad(c))*Math.sin(r/2)**2;return 6371000*2*Math.asin(Math.sqrt(x))/NM};
 const dme=a=>dist(me.lat,me.lon,a.lat,a.lon);
-const kind=a=>(a.dbFlags||0)&1?"mil":a.category==="A7"?"heli":/^[A-Z]{3}\d/.test((a.flight||"").trim())?"com":"ga";
+const kind=a=>/^(EC35|EC45|H135|H145)$/.test(String(a.t||"").trim().toUpperCase())||a.category==="A7"?"heli":(a.dbFlags||0)&1?"mil":/^[A-Z]{3}\d/.test((a.flight||"").trim())?"com":"ga";
 const COL={com:"#fbbf24",ga:"#4ade80",mil:"#f87171",heli:"#fb923c"};
 const nm=a=>(a.flight||"").trim()||a.r||a.hex.toUpperCase();
 const alt=a=>a.alt_baro==="ground"?"GND":typeof a.alt_baro==="number"?a.alt_baro.toLocaleString():"—";
 const vis=a=>filter==="all"||kind(a)===filter;
 const PLANE='<path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z"/>';
+
+const HELICOPTER='<path d="M1 7h22v1.8H1z"/><path d="M10.5 8.5h3v2h-3z"/><path d="M7 11.5q0-2 3-2h5q2.5 0 3 2l1 3q.5 2-2 2H8q-2 0-2-2z"/><path d="M7 13H2V11h5z"/><path d="M3 9v6H1V9z"/><path d="M8 18h9v1.5H8z"/><path d="M10 16v3h1.5v-3zM15 16v3h1.5v-3z"/>';
 
 // ---------- map ----------
 const map=L.map("map",{zoomControl:false,attributionControl:true}).setView([me.lat,me.lon],10);
@@ -272,7 +274,7 @@ function draw(){
  const seen=new Set();
  data.filter(vis).forEach(a=>{
   seen.add(a.hex);const c=COL[kind(a)],s=a.hex===sel?" s":"";
-  const icon=L.divIcon({className:"",iconSize:[0,0],html:`<div class="pl${s}"><svg viewBox="0 0 24 24" fill="${c}" stroke="#000" stroke-width=".6" style="transform:rotate(${a.track||0}deg)">${PLANE}</svg><div class="lb" style="color:${c}">${esc(nm(a))}<br>${alt(a)}${a.alt_baro==="ground"?"":" ft"}<br>${a.gs!=null?Math.round(a.gs)+" kt":""}</div></div>`});
+  const icon=L.divIcon({className:"",iconSize:[0,0],html:`<div class="pl${s}"><svg viewBox="0 0 24 24" fill="${c}" stroke="#000" stroke-width=".6" style="transform:rotate(${a.track||0}deg)">${kind(a)==="heli"?HELICOPTER:PLANE}</svg><div class="lb" style="color:${c}">${esc(nm(a))}<br>${alt(a)}${a.alt_baro==="ground"?"":" ft"}<br>${a.gs!=null?Math.round(a.gs)+" kt":""}</div></div>`});
   if(mk[a.hex]){
    const loc=mk[a.hex].getLatLng();mk[a.hex].setIcon(icon);
    const prev=motion.get(a.hex),newReport=!prev||prev.report.lat!==a.lat||prev.report.lon!==a.lon;
