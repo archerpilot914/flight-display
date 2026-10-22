@@ -252,19 +252,38 @@ function renderSel(){
 // ---------- right-panel views ----------
 function rows(list){return list.map(a=>`<tr class="r${a.hex===sel?" s":""}" data-h="${a.hex}"><td style="color:${COL[kind(a)]}">${esc(nm(a))}</td><td>${esc(a.t||"—")}</td><td>${alt(a)}</td><td>${a.gs!=null?Math.round(a.gs):"—"}</td><td>${dme(a).toFixed(1)} NM</td></tr>`).join("")}
 const head="<table><thead><tr><th>Callsign</th><th>Type</th><th>Alt</th><th>Spd</th><th>Dist</th></tr></thead><tbody>";
+// Common IATA airline designators → ICAO callsign prefixes.
+// These cover many North American carriers; airline-operated callsigns can differ.
+const airlineCodes={
+ "AA":"AAL","DL":"DAL","UA":"UAL","WN":"SWA","B6":"JBU","AS":"ASA",
+ "NK":"NKS","F9":"FFT","G4":"AAY","SY":"SCX","HA":"HAL",
+ "AC":"ACA","WS":"WJA","PD":"POE","AM":"AMX","VB":"VIV",
+ "Y4":"VOI","5X":"UPS","FX":"FDX"
+};
+function flightSearchQueries(input){
+ const value=input.trim().toUpperCase().replace(/\s+/g,"");
+ const m=/^([A-Z0-9]{2})([0-9]{1,4}[A-Z]?)$/.exec(value);
+ if(m&&airlineCodes[m[1]])return [airlineCodes[m[1]]+m[2],value];
+ return [value];
+}
 async function lookupFlight(){
- const query=q.trim().toUpperCase();
+ const query=q.trim().toUpperCase().replace(/\s+/g,"");
+ const queries=flightSearchQueries(query);
  if(!/^[A-Z0-9-]{3,12}$/.test(query)){searchError="Enter a valid callsign, registration or ICAO hex (3–12 characters).";renderView();return}
  searchBusy=true;searchError="";renderView();
  try{
-  const response=await fetch("/api/search?query="+encodeURIComponent(query),{signal:AbortSignal.timeout(12000),cache:"no-store"});
-  const payload=await response.json();
-  if(!response.ok)throw Error(payload.error||"Search unavailable");
-  const matches=(payload.ac||[]).filter(a=>a.hex&&Number.isFinite(Number(a.lat))&&Number.isFinite(Number(a.lon)));
-  if(!matches.length){searchError="No currently reporting aircraft found for "+query;return}
+  let matches=[],source="",resolved="";
+  for(const candidate of queries){
+   const response=await fetch("/api/search?query="+encodeURIComponent(candidate),{signal:AbortSignal.timeout(12000),cache:"no-store"});
+   const payload=await response.json();
+   if(!response.ok)throw Error(payload.error||"Search unavailable");
+   matches=(payload.ac||[]).filter(a=>a.hex&&Number.isFinite(Number(a.lat))&&Number.isFinite(Number(a.lon)));
+   if(matches.length){source=payload.source||"internet";resolved=candidate;break}
+  }
+  if(!matches.length){searchError="No currently reporting aircraft found for "+query+(queries.length>1?" (also tried "+queries[0]+")":"");return}
   const match=matches[0];remoteAircraft=match;remoteFoundAt=Date.now();
   data=data.filter(a=>a.hex!==match.hex).concat(match);
-  sel=match.hex;follow=true;searchError="Found "+nm(match)+" via "+(payload.source||"internet")+"; showing live position, not a filed flight plan.";
+  sel=match.hex;follow=true;searchError="Found "+nm(match)+" via "+source+(resolved!==query?" ("+query+" → "+resolved+")":"")+"; showing live position, not a filed flight plan.";
   const t=trails[match.hex]||(trails[match.hex]=[]);t.push([match.lat,match.lon]);
   map.flyTo([match.lat,match.lon],Math.max(map.getZoom(),8));
   draw();
@@ -279,7 +298,7 @@ function renderView(){
   $("nr").onchange=e=>{cfg.nr=+e.target.value;save();renderView()};
  }else if(view==="search"){
   const t=q.toLowerCase(),l=t?data.filter(a=>[a.flight,a.r,a.hex,a.t].join(" ").toLowerCase().includes(t)).slice(0,50):[];
-  v.innerHTML=`<b>Find a flight anywhere</b><div class="row" style="margin:7px 0"><input id="qi" placeholder="Callsign, tail number or ICAO hex" value="${esc(q)}" style="flex:1"><button id="lookup" style="min-width:78px" ${searchBusy?"disabled":""}>${searchBusy?"Searching…":"Search"}</button></div><div class="mu">${esc(searchError||"Search the internet by exact callsign, registration, or hex. Only live aircraft with reported positions can be found.")}</div>${t?head+rows(l)+"</tbody></table>":""}`;
+  v.innerHTML=`<b>Find a flight anywhere</b><div class="row" style="margin:7px 0"><input id="qi" placeholder="DL123, UA54, N123AB or ICAO hex" value="${esc(q)}" style="flex:1"><button id="lookup" style="min-width:78px" ${searchBusy?"disabled":""}>${searchBusy?"Searching…":"Search"}</button></div><div class="mu">${esc(searchError||"Use DL123, UA54, AC123, an ICAO callsign, registration, or hex. Searches available live aircraft across provider coverage.")}</div>${t?head+rows(l)+"</tbody></table>":""}`;
   const i=$("qi");i.oninput=e=>{q=e.target.value;searchError="";};
   i.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();lookupFlight()}};
   $("lookup").onclick=lookupFlight;
