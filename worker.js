@@ -32,6 +32,20 @@ export default {
         return new Response(JSON.stringify({ error: "metar fetch failed" }), { status: 502, headers: CORS });
       }
     }
+    // ADSBdb reports origin/destination metadata, not an actual filed ATC route.
+    if (u.pathname === "/api/route") {
+      const cs=(u.searchParams.get("callsign")||"").trim().toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,12);
+      if(!cs)return Response.json({error:"callsign required"},{status:400});
+      try {
+        const up=await fetch("https://api.adsbdb.com/v0/callsign/"+encodeURIComponent(cs),{
+          headers:{"Accept":"application/json"},
+          signal:AbortSignal.timeout(8000),
+          cf:{cacheTtl:3600,cacheEverything:true}
+        });
+        const response=await up.text();
+        return new Response(response,{status:up.status,headers:{"Content-Type":up.headers.get("content-type")||"application/json","Cache-Control":up.ok?"public, max-age=3600":"no-store"}});
+      }catch(e){return Response.json({error:"Route metadata provider unavailable"},{status:502,headers:{"Cache-Control":"no-store"}})}
+    }
     if (u.pathname === "/api/search") {
       const query=(u.searchParams.get("query")||"").trim().toUpperCase();
       if(!/^[A-Z0-9-]{3,12}$/.test(query))return Response.json({error:"Invalid callsign, registration or hex"},{status:400});
