@@ -32,6 +32,28 @@ export default {
         return new Response(JSON.stringify({ error: "metar fetch failed" }), { status: 502, headers: CORS });
       }
     }
+    if (u.pathname === "/api/search") {
+      const query=(u.searchParams.get("query")||"").trim().toUpperCase();
+      if(!/^[A-Z0-9-]{3,12}$/.test(query))return Response.json({error:"Invalid callsign, registration or hex"},{status:400});
+      const isHex=/^[0-9A-F]{6}$/.test(query);
+      const lookup = isHex?"icao":query.startsWith("N")&&/^[N][0-9A-Z-]+$/.test(query)?"reg":"callsign";
+      const attempts=[];
+      const candidates=[
+        ["adsb.lol","https://api.adsb.lol/v2/"],
+        ["adsb.fi","https://opendata.adsb.fi/api/v2/"],
+        ["adsb.one","https://api.adsb.one/v2/"]
+      ];
+      for(const [provider,root] of candidates){
+        try{
+          const response=await fetch(root+lookup+"/"+encodeURIComponent(query),{headers:{"Accept":"application/json"},signal:AbortSignal.timeout(6500)});
+          if(!response.ok){attempts.push(provider+": HTTP "+response.status);continue}
+          const json=await response.json();
+          if(!Array.isArray(json.ac)){attempts.push(provider+": invalid format");continue}
+          return Response.json({ac:json.ac,source:provider},{headers:{"Cache-Control":"public,max-age=10"}});
+        }catch(e){attempts.push(provider+": "+String(e).slice(0,75))}
+      }
+      return Response.json({error:"Aircraft search providers unavailable",attempts},{status:502,headers:{"Cache-Control":"no-store"}});
+    }
     if (u.pathname !== "/api/aircraft" && u.pathname !== "/") return env.ASSETS.fetch(request);
     if (u.pathname === "/" && !u.searchParams.has("lat")) return env.ASSETS.fetch(request);
     const q = u.searchParams;
