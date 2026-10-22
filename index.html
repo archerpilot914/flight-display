@@ -1,3 +1,4 @@
+L
 <!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="utf-8">
@@ -83,7 +84,7 @@ const nm=a=>(a.flight||"").trim()||a.r||a.hex.toUpperCase();
 const alt=a=>a.alt_baro==="ground"?"GND":typeof a.alt_baro==="number"?a.alt_baro.toLocaleString():"—";
 const vis=a=>filter==="all"||kind(a)===filter;
 const PLANE='<path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z"/>';
-
+ 
 // ---------- map ----------
 const map=L.map("map",{zoomControl:false,attributionControl:true}).setView([me.lat,me.lon],10);
 L.control.zoom({position:"bottomright"}).addTo(map);
@@ -111,7 +112,7 @@ function drawHome(){
 function drawAps(){apL.clearLayers();AP.forEach(([id,n,la,lo])=>L.marker([la,lo],{icon:L.divIcon({className:"",html:`<div class="ap" style="transform:translate(-8px,-8px)"><u></u>${id}</div>`})}).on("click",()=>{map.setView([la,lo],11)}).addTo(apL))}
 function layers(){const s=(l,on)=>on?l.addTo(map):map.removeLayer(l);s(ringL,cfg.rings);s(apL,cfg.aps);s(radar,cfg.radar)}
 drawHome();drawAps();layers();
-
+ 
 // ---------- traffic ----------
 let lastErr="";
 async function loadInner(){const errs=[];
@@ -163,7 +164,7 @@ function renderSel(){
  $("bF").onclick=()=>{follow=!follow;draw()};$("bR").onclick=()=>{trailOn=!trailOn;draw()};
  $("bM").onclick=()=>window.open("https://globe.adsb.lol/?icao="+a.hex,"_blank");
 }
-
+ 
 // ---------- right-panel views ----------
 function rows(list){return list.map(a=>`<tr class="r${a.hex===sel?" s":""}" data-h="${a.hex}"><td style="color:${COL[kind(a)]}">${esc(nm(a))}</td><td>${esc(a.t||"—")}</td><td>${alt(a)}</td><td>${a.gs!=null?Math.round(a.gs):"—"}</td><td>${dme(a).toFixed(1)} NM</td></tr>`).join("")}
 const head="<table><thead><tr><th>Callsign</th><th>Type</th><th>Alt</th><th>Spd</th><th>Dist</th></tr></thead><tbody>";
@@ -206,7 +207,7 @@ $("view").addEventListener("click",e=>{
  const m=e.target.closest("[data-b]");if(m){cfg.base=m.dataset.b;save();setBase(cfg.base);drawHome();renderView()}});
 $("nav").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;view=b.dataset.v;document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("on",x===b));renderView()});
 $("sb").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;filter=b.dataset.f;document.querySelectorAll("#sb button").forEach(x=>x.classList.toggle("on",x===b));draw()});
-
+ 
 // ---------- weather (METAR from nearest airport, Open-Meteo fallback) ----------
 const cvTxt={CLR:"Clear",SKC:"Clear",FEW:"Mostly Clear",SCT:"Partly Cloudy",BKN:"Mostly Cloudy",OVC:"Overcast"},cvIc={CLR:"☀️",SKC:"☀️",FEW:"🌤",SCT:"⛅",BKN:"🌥",OVC:"☁️"};
 const F=c=>Math.round(c*9/5+32);
@@ -232,7 +233,7 @@ async function loadWx(){
  $("wx").innerHTML=`<b>${wx.id}</b> (${wx.dist} NM) ${wx.icon} ${wx.temp}°F • ${wx.wind} • ${wx.vis} SM • ${wx.alt}<br><span class="mu">${esc(wx.clouds||"")}${wx.time?" • "+wx.time:""}</span>`;
  if(view==="weather")renderView();
 }
-
+ 
 // ---------- GPS, clock, status ----------
 async function loadTz(){try{const j=await(await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${me.lat}&longitude=${me.lon}&current=temperature_2m&timezone=auto`)).json();new Intl.DateTimeFormat([],{timeZone:j.timezone});tz=j.timezone;tick()}catch(e){}}
 let gw=null,first=true;
