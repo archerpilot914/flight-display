@@ -80,6 +80,7 @@ const shrink=(f,cb)=>{const r=new FileReader();r.onload=()=>{const i=new Image()
 let tz;
 const CC={VFR:"#22c55e",MVFR:"#3b82f6",IFR:"#ec4899",LIFR:"#a855f7",NA:"#6b7280"};let cats={};
 let me={lat:cfg.lat??43.5727,lon:cfg.lon??-71.4189,gps:false}, data=[], filter="all", view="traffic", sel=null, follow=false, trailOn=false, src=0, wx=null, trails={}, mk={}, q="";
+let remoteAircraft=null,remoteFoundAt=0,searchError="",searchBusy=false;
 const rad=x=>x*Math.PI/180;
 const dist=(a,b,c,d)=>{const p=rad(c-a),r=rad(d-b),x=Math.sin(p/2)**2+Math.cos(rad(a))*Math.cos(rad(c))*Math.sin(r/2)**2;return 6371000*2*Math.asin(Math.sqrt(x))/NM};
 const dme=a=>dist(me.lat,me.lon,a.lat,a.lon);
@@ -149,6 +150,7 @@ async function loadInner(){const errs=[];
    const incoming=s.p?s.p(j):(j.ac||j.aircraft);
    if(!Array.isArray(incoming))throw Error("Unexpected aircraft data format");
    data=incoming.filter(a=>a.lat!=null&&a.lon!=null);
+   if(remoteAircraft&&Date.now()-remoteFoundAt<90000&&!data.some(a=>a.hex===remoteAircraft.hex))data.push(remoteAircraft);
    src=(src+i)%list.length;
    data.forEach(a=>{const t=trails[a.hex]=trails[a.hex]||[],l=t[t.length-1];if(!l||l[0]!=a.lat||l[1]!=a.lon){t.push([a.lat,a.lon]);if(t.length>80)t.shift()}});
    $("sA").className="ok";$("sA").textContent=`Receiving (${s.n})`;
@@ -160,19 +162,31 @@ async function loadInner(){const errs=[];
 }
 let busy=false;const load=async()=>{if(busy)return;busy=true;try{await loadInner()}finally{busy=false}};
 let timer;const sched=()=>{clearInterval(timer);timer=setInterval(load,Math.max(10,cfg.poll)*1000)};
-// Animate between consecutive actual reports; never predict beyond received positions.
+// Smooth predicted movement from ADS-B groundspeed and track.
+// Positions between actual feed reports are estimates, not confirmed locations.
 const motion=new Map();
-const smoothstep=t=>t*t*(3-2*t);
+const maxPredictionSeconds=14;
+let lastFrame=0;
+function projectPosition(lat,lon,speed,heading,seconds){
+ const nm=(Math.max(0,Number(speed)||0)*seconds)/3600;
+ const bearing=(Number(heading)||0)*Math.PI/180,lat2=lat+nm*Math.cos(bearing)/60;
+ const cos=Math.max(.05,Math.cos(lat*Math.PI/180));
+ return [lat2,lon+nm*Math.sin(bearing)/(60*cos)];
+}
 function animateAircraft(now){
- for(const [hex,m] of motion){
-  const marker=mk[hex];if(!marker){motion.delete(hex);continue}
-  const t=Math.min(1,(now-m.start)/m.duration),f=smoothstep(Math.max(0,t));
-  const lat=m.from[0]+(m.to[0]-m.from[0])*f;
-  let dl=m.to[1]-m.from[1];if(dl>180)dl-=360;if(dl< -180)dl+=360;
-  const lon=m.from[1]+dl*f;
-  marker.setLatLng([lat,lon]);
-  if(follow&&sel===hex&&t<1)map.panTo([lat,lon],{animate:false});
-  if(t>=1)motion.delete(hex);
+ if(now-lastFrame>32){lastFrame=now;
+  for(const [hex,m] of motion){
+   const marker=mk[hex];if(!marker){motion.delete(hex);continue}
+   const elapsed=Math.max(0,(now-m.time)/1000);
+   // Avoid pretending stale data is still live.
+   const forward=Math.min(elapsed,maxPredictionSeconds);
+   const predicted=projectPosition(m.report.lat,m.report.lon,m.report.gs,m.report.track,forward);
+   const correction=Math.min(1,elapsed/2);
+   const lat=m.previous[0]*(1-correction)+predicted[0]*correction;
+   const lon=m.previous[1]*(1-correction)+predicted[1]*correction;
+   marker.setLatLng([lat,lon]);
+   if(follow&&sel===hex)map.panTo([lat,lon],{animate:false});
+  }
  }
  requestAnimationFrame(animateAircraft);
 }
@@ -183,16 +197,18 @@ function draw(){
   seen.add(a.hex);const c=COL[kind(a)],s=a.hex===sel?" s":"";
   const icon=L.divIcon({className:"",iconSize:[0,0],html:`<div class="pl${s}"><svg viewBox="0 0 24 24" fill="${c}" stroke="#000" stroke-width=".6" style="transform:rotate(${a.track||0}deg)">${PLANE}</svg><div class="lb" style="color:${c}">${esc(nm(a))}<br>${alt(a)}${a.alt_baro==="ground"?"":" ft"}<br>${a.gs!=null?Math.round(a.gs)+" kt":""}</div></div>`});
   if(mk[a.hex]){
-   const pos=mk[a.hex].getLatLng(),changed=Math.abs(pos.lat-a.lat)>0.000001||Math.abs(pos.lng-a.lon)>0.000001;
-   mk[a.hex].setIcon(icon);
-   if(changed)motion.set(a.hex,{from:[pos.lat,pos.lng],to:[a.lat,a.lon],start:performance.now(),duration:Math.max(1000,Math.min(10000,Math.max(10,cfg.poll)*1000-350))});
-   else motion.delete(a.hex);
-  }else mk[a.hex]=L.marker([a.lat,a.lon],{icon}).addTo(acL).on("click",()=>pick(a.hex));
+   const loc=mk[a.hex].getLatLng();mk[a.hex].setIcon(icon);
+   const prev=motion.get(a.hex),newReport=!prev||prev.report.lat!==a.lat||prev.report.lon!==a.lon;
+   if(newReport)motion.set(a.hex,{previous:[loc.lat,loc.lng],report:{lat:a.lat,lon:a.lon,gs:a.gs,track:a.track},time:performance.now()});
+  }else{
+   mk[a.hex]=L.marker([a.lat,a.lon],{icon}).addTo(acL).on("click",()=>pick(a.hex));
+   motion.set(a.hex,{previous:[a.lat,a.lon],report:{lat:a.lat,lon:a.lon,gs:a.gs,track:a.track},time:performance.now()});
+  }
  });
  Object.keys(mk).forEach(h=>{if(!seen.has(h)){acL.removeLayer(mk[h]);motion.delete(h);delete mk[h]}});
  trL.clearLayers();
  const a=data.find(x=>x.hex===sel);
- if(a&&trailOn&&trails[sel])L.polyline(trails[sel],{color:"#38bdf8",weight:3}).addTo(trL);
+ if(a&&trailOn&&trails[sel]&&trails[sel].length>1)L.polyline(trails[sel],{color:"#38bdf8",weight:3,dashArray:"7 5"}).addTo(trL);
  if(a&&follow&&!motion.has(a.hex))map.panTo([a.lat,a.lon],{animate:false});
  renderSel();if(view==="traffic"||view==="search")renderView();
 }
@@ -209,13 +225,35 @@ function renderSel(){
  <div><span>Distance</span><b>${d.toFixed(1)} NM @ ${Math.round(b)}°</b></div><div><span>Vert rate</span><b>${vr!=null?(vr>0?"+":"")+vr+" fpm":"—"}</b></div>
  <div><span>ICAO24</span><b>${a.hex.toUpperCase()}</b></div><div><span>Source</span><b class="ok">ADS-B</b></div></div>
  <div class="row"><button id="bF" class="${follow?"on":""}">⊕ Follow</button><button id="bR" class="${trailOn?"on":""}">☷ Show Route</button><button id="bM">ⓘ More Info</button></div>`;
- $("bF").onclick=()=>{follow=!follow;draw()};$("bR").onclick=()=>{trailOn=!trailOn;draw()};
+ $("bF").onclick=()=>{follow=!follow;draw()};
+ $("bR").onclick=()=>{trailOn=!trailOn;draw();const n=(trails[sel]||[]).length;
+  $("sel").insertAdjacentHTML("beforeend",'<div class="mu" style="margin-top:7px">Showing observed track: '+n+' positions collected since this display started. A filed/planned IFR route is not supplied by the current ADS-B feed.</div>');
+ };
  $("bM").onclick=()=>window.open("https://globe.adsb.lol/?icao="+a.hex,"_blank");
 }
 
 // ---------- right-panel views ----------
 function rows(list){return list.map(a=>`<tr class="r${a.hex===sel?" s":""}" data-h="${a.hex}"><td style="color:${COL[kind(a)]}">${esc(nm(a))}</td><td>${esc(a.t||"—")}</td><td>${alt(a)}</td><td>${a.gs!=null?Math.round(a.gs):"—"}</td><td>${dme(a).toFixed(1)} NM</td></tr>`).join("")}
 const head="<table><thead><tr><th>Callsign</th><th>Type</th><th>Alt</th><th>Spd</th><th>Dist</th></tr></thead><tbody>";
+async function lookupFlight(){
+ const query=q.trim().toUpperCase();
+ if(!/^[A-Z0-9-]{3,12}$/.test(query)){searchError="Enter a valid callsign, registration or ICAO hex (3–12 characters).";renderView();return}
+ searchBusy=true;searchError="";renderView();
+ try{
+  const response=await fetch("/api/search?query="+encodeURIComponent(query),{signal:AbortSignal.timeout(12000),cache:"no-store"});
+  const payload=await response.json();
+  if(!response.ok)throw Error(payload.error||"Search unavailable");
+  const matches=(payload.ac||[]).filter(a=>a.hex&&Number.isFinite(Number(a.lat))&&Number.isFinite(Number(a.lon)));
+  if(!matches.length){searchError="No currently reporting aircraft found for "+query;return}
+  const match=matches[0];remoteAircraft=match;remoteFoundAt=Date.now();
+  data=data.filter(a=>a.hex!==match.hex).concat(match);
+  sel=match.hex;follow=true;searchError="Found "+nm(match)+" via "+(payload.source||"internet")+"; showing live position, not a filed flight plan.";
+  const t=trails[match.hex]||(trails[match.hex]=[]);t.push([match.lat,match.lon]);
+  map.flyTo([match.lat,match.lon],Math.max(map.getZoom(),8));
+  draw();
+ }catch(e){searchError="Flight search unavailable: "+e.message}
+ finally{searchBusy=false;renderView()}
+}
 function renderView(){
  const v=$("view");
  if(view==="traffic"){
@@ -224,8 +262,10 @@ function renderView(){
   $("nr").onchange=e=>{cfg.nr=+e.target.value;save();renderView()};
  }else if(view==="search"){
   const t=q.toLowerCase(),l=t?data.filter(a=>[a.flight,a.r,a.hex,a.t].join(" ").toLowerCase().includes(t)).slice(0,50):[];
-  v.innerHTML=`<input id="qi" placeholder="Callsign, tail number, ICAO24 or type" value="${esc(q)}">${t?head+rows(l)+"</tbody></table>":'<div class="mu">Searches all aircraft within 50 NM of you.</div>'}`;
-  const i=$("qi");i.oninput=e=>{q=e.target.value;const p=i.selectionStart;renderView();$("qi").focus();$("qi").setSelectionRange(p,p)};
+  v.innerHTML=`<b>Find a flight anywhere</b><div class="row" style="margin:7px 0"><input id="qi" placeholder="Callsign, tail number or ICAO hex" value="${esc(q)}" style="flex:1"><button id="lookup" style="min-width:78px" ${searchBusy?"disabled":""}>${searchBusy?"Searching…":"Search"}</button></div><div class="mu">${esc(searchError||"Search the internet by exact callsign, registration, or hex. Only live aircraft with reported positions can be found.")}</div>${t?head+rows(l)+"</tbody></table>":""}`;
+  const i=$("qi");i.oninput=e=>{q=e.target.value;searchError="";};
+  i.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();lookupFlight()}};
+  $("lookup").onclick=lookupFlight;
  }else if(view==="airports"){
   v.innerHTML="<b>Nearby airports</b><table><tbody>"+AP.map(([id,n,la,lo])=>[id,n,la,lo,dist(me.lat,me.lon,la,lo)]).sort((a,b)=>a[4]-b[4]).map(([id,n,la,lo,d])=>`<tr class="r" data-ap="${la},${lo}"><td><span style="color:${CC[cats[id]]||CC.NA}">●</span> <b>${id}</b> <span class="mu">${cats[id]||""}</span></td><td>${n}</td><td>${d.toFixed(1)} NM</td></tr>`).join("")+"</tbody></table>";
  }else if(view==="weather"){
