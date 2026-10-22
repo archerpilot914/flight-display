@@ -32,6 +32,57 @@ export default {
         return new Response(JSON.stringify({ error: "metar fetch failed" }), { status: 502, headers: CORS });
       }
     }
+    // ADSBdb reports origin/destination metadata, not an actual filed ATC route.
+    if (u.pathname === "/api/route") {
+      const cs=(u.searchParams.get("callsign")||"").trim().toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,12);
+      if(!cs)return Response.json({error:"callsign required"},{status:400});
+      try {
+        const up=await fetch("https://api.adsbdb.com/v0/callsign/"+encodeURIComponent(cs),{
+          headers:{"Accept":"application/json"},
+          signal:AbortSignal.timeout(8000),
+          cf:{cacheTtl:3600,cacheEverything:true}
+        });
+        const response=await up.text();
+        return new Response(response,{status:up.status,headers:{"Content-Type":up.headers.get("content-type")||"application/json","Cache-Control":up.ok?"public, max-age=3600":"no-store"}});
+      }catch(e){return Response.json({error:"Route metadata provider unavailable"},{status:502,headers:{"Cache-Control":"no-store"}})}
+    }
+    if (u.pathname === "/api/search") {
+      const query=(u.searchParams.get("query")||"").trim().toUpperCase();
+      if(!/^[A-Z0-9-]{3,12}$/.test(query))return Response.json({error:"Invalid callsign, registration or hex"},{status:400});
+      // Identity lookups are provider-wide, not restricted to the home radar.
+      // Try callsign and registration separately; e.g. NKS123 is a callsign,
+      // while N123AB is a registration.
+      const isHex=/^[0-9A-F]{6}$/.test(query);
+      const modes=isHex?["icao"]:["callsign","registration"];
+      const attempts=[];
+      let sawValidEmpty=false;
+      const candidates=[
+        {name:"adsb.lol",root:"https://api.adsb.lol/v2/",registration:"reg"},
+        {name:"adsb.fi",root:"https://opendata.adsb.fi/api/v2/",registration:"registration"},
+        {name:"adsb.one",root:"https://api.adsb.one/v2/",registration:"reg"},
+        {name:"airplanes.live",root:"https://api.airplanes.live/v2/",registration:"reg"}
+      ];
+      for(const mode of modes){
+        for(const provider of candidates){
+          const path=mode==="registration"?provider.registration:mode;
+          try{
+            const response=await fetch(provider.root+path+"/"+encodeURIComponent(query),{
+              headers:{"Accept":"application/json"},
+              signal:AbortSignal.timeout(6500)
+            });
+            if(!response.ok){attempts.push(provider.name+" "+mode+": HTTP "+response.status);continue}
+            const json=await response.json();
+            if(!Array.isArray(json.ac)){attempts.push(provider.name+" "+mode+": invalid format");continue}
+            if(json.ac.length){
+              return Response.json({ac:json.ac,source:provider.name,search_mode:mode},{headers:{"Cache-Control":"public,max-age=10"}});
+            }
+            sawValidEmpty=true;
+          }catch(e){attempts.push(provider.name+" "+mode+": "+String(e).slice(0,75))}
+        }
+      }
+      if(sawValidEmpty)return Response.json({ac:[],source:"internet",search_mode:"identity"},{headers:{"Cache-Control":"public,max-age=10"}});
+      return Response.json({error:"Live aircraft search unavailable from this server; providers may restrict Cloudflare requests",attempts},{status:503,headers:{"Cache-Control":"no-store"}});
+    }
     if (u.pathname !== "/api/aircraft" && u.pathname !== "/") return env.ASSETS.fetch(request);
     if (u.pathname === "/" && !u.searchParams.has("lat")) return env.ASSETS.fetch(request);
     const q = u.searchParams;
