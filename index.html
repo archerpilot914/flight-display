@@ -60,7 +60,8 @@ input,select{width:100%;padding:9px;background:var(--bg);color:var(--tx);border:
 <script>
 if(typeof L==="undefined"){document.body.innerHTML='<p style="padding:20px;color:#fff">Map library failed to load. Check your internet connection or ad-blocker.</p>';throw new Error("Leaflet missing")}
 const $=id=>document.getElementById(id), NM=1852, esc=s=>String(s).replace(/[<>&"]/g,"");
-const SOURCES=[ // free, keyless, CORS-enabled ADS-B aggregators (tried in order)
+const SOURCES=[ // Try the same-origin Worker relay, then direct sources
+ {n:"site relay",u:(a,b,r)=>`/api/aircraft?lat=${a}&lon=${b}&r=${r}`},
  {n:"adsb.lol",u:(a,b,r)=>`https://api.adsb.lol/v2/point/${a}/${b}/${r}`},
  {n:"adsb.fi",u:(a,b,r)=>`https://opendata.adsb.fi/api/v2/lat/${a}/lon/${b}/dist/${r}`},
  {n:"adsb.one",u:(a,b,r)=>`https://api.adsb.one/v2/point/${a}/${b}/${r}`},
@@ -215,7 +216,7 @@ $("sb").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)re
 // ---------- weather (METAR from nearest airport, Open-Meteo fallback) ----------
 const cvTxt={CLR:"Clear",SKC:"Clear",FEW:"Mostly Clear",SCT:"Partly Cloudy",BKN:"Mostly Cloudy",OVC:"Overcast"},cvIc={CLR:"☀️",SKC:"☀️",FEW:"🌤",SCT:"⛅",BKN:"🌥",OVC:"☁️"};
 const F=c=>Math.round(c*9/5+32);
-const metarUrl=ids=>(cfg.relay?cfg.relay.replace(/\/+$/,"")+"/metar":"https://aviationweather.gov/api/data/metar")+"?format=json&ids="+ids;
+const metarUrl=ids=>"/api/metar?format=json&ids="+ids;
 function catOf(m){if(m.fltCat)return m.fltCat;const v=parseFloat(String(m.visib).replace("+","")),cl=(m.clouds||[]).filter(c=>(c.cover==="BKN"||c.cover==="OVC")&&c.base!=null).map(c=>c.base),c=cl.length?Math.min(...cl):99999;
  if(v<1||c<500)return"LIFR";if(v<3||c<1000)return"IFR";if(v<=5||c<=3000)return"MVFR";return"VFR"}
 async function loadCats(){try{const j=await(await fetch(metarUrl(AP.map(a=>a[0]).join(",")))).json();const c={};j.forEach(m=>{c[m.icaoId]=catOf(m)});cats=c;drawAps();if(view==="airports")renderView()}catch(e){console.warn("flight categories unavailable",e)}}
