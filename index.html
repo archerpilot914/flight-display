@@ -160,7 +160,24 @@ async function loadInner(){const errs=[];
  $("sA").className="bad";$("sA").textContent="No data — "+errs.join(" • ").slice(0,210);
  console.warn("Aircraft sources unavailable",errs);
 }
-let busy=false;const load=async()=>{if(busy)return;busy=true;try{await loadInner()}finally{busy=false}};
+async function updateFollowedAircraft(){
+ if(!follow||!sel||!/^[0-9a-f]{6}$/i.test(sel))return;
+ try{
+  const res=await fetch("/api/search?query="+encodeURIComponent(sel),{signal:AbortSignal.timeout(8500),cache:"no-store"});
+  if(!res.ok)return;
+  const payload=await res.json();
+  const a=(payload.ac||[]).find(x=>x.hex?.toLowerCase()===sel.toLowerCase()&&x.lat!=null&&x.lon!=null);
+  if(!a)return;
+  const old=data.find(x=>x.hex===sel);
+  if(old&&old.lat===a.lat&&old.lon===a.lon)return;
+  remoteAircraft=a;remoteFoundAt=Date.now();
+  data=data.filter(x=>x.hex!==a.hex).concat(a);
+  const t=trails[a.hex]||(trails[a.hex]=[]);
+  if(!t.length||t[t.length-1][0]!==a.lat||t[t.length-1][1]!==a.lon){t.push([a.lat,a.lon]);if(t.length>100)t.shift()}
+  draw();
+ }catch(e){console.warn("Follow update unavailable",e)}
+}
+let busy=false;const load=async()=>{if(busy)return;busy=true;try{await loadInner();await updateFollowedAircraft()}finally{busy=false}};
 let timer;const sched=()=>{clearInterval(timer);timer=setInterval(load,Math.max(10,cfg.poll)*1000)};
 // Smooth predicted movement from ADS-B groundspeed and track.
 // Positions between actual feed reports are estimates, not confirmed locations.
