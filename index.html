@@ -68,7 +68,7 @@ const SOURCES=[ // Try the same-origin Worker relay, then direct sources
  {n:"OpenSky",min:30000,u:(a,b,r)=>{a=+a;b=+b;const d=r/60,e=d/Math.cos(a*Math.PI/180);return `https://opensky-network.org/api/states/all?lamin=${a-d}&lomin=${b-e}&lamax=${a+d}&lomax=${b+e}`},
   p:j=>(j.states||[]).filter(t=>t[5]!=null&&t[6]!=null).map(t=>({hex:t[0],flight:(t[1]||"").trim(),lat:t[6],lon:t[5],alt_baro:t[8]?"ground":(t[7]!=null?Math.round(t[7]*3.28084):undefined),gs:t[9]!=null?t[9]*1.94384:undefined,track:t[10],baro_rate:t[11]!=null?Math.round(t[11]*196.85):undefined,squawk:t[14],category:t[17]===8?"A7":""}))}];
 const AP=[["KLCI","Laconia",43.5727,-71.4189],["KCON","Concord",43.2027,-71.5023],["KMHT","Manchester",42.9326,-71.4357],["KASH","Nashua",42.7817,-71.5148],["KPSM","Portsmouth",43.0779,-70.8233],["KSFM","Sanford",43.3939,-70.7088],["KDAW","Rochester",43.2841,-71.0292],["KPWM","Portland",43.6462,-70.3093],["KBOS","Boston Logan",42.3643,-71.0052],["KBED","Hanscom",42.47,-71.289],["KORH","Worcester",42.2673,-71.8757],["KEEN","Keene",42.8984,-72.2708],["KLEB","Lebanon",43.6261,-72.3042]];
-let cfg={relay:"",poll:15,lat:null,lon:null,radar:true,rings:true,aps:true,nr:25};
+let cfg={relay:"",poll:10,lat:null,lon:null,radar:true,rings:true,aps:true,nr:25};
 try{Object.assign(cfg,JSON.parse(localStorage.getItem("fdcfg")||"{}"))}catch(e){}
 const save=()=>{try{localStorage.setItem("fdcfg",JSON.stringify(cfg))}catch(e){}};
 let photos={};try{photos=JSON.parse(localStorage.getItem("fdphotos")||"{}")}catch(e){}
@@ -140,18 +140,40 @@ async function loadInner(){const errs=[];
 }
 let busy=false;const load=async()=>{if(busy)return;busy=true;try{await loadInner()}finally{busy=false}};
 let timer;const sched=()=>{clearInterval(timer);timer=setInterval(load,Math.max(10,cfg.poll)*1000)};
+// Animate between consecutive actual reports; never predict beyond received positions.
+const motion=new Map();
+const smoothstep=t=>t*t*(3-2*t);
+function animateAircraft(now){
+ for(const [hex,m] of motion){
+  const marker=mk[hex];if(!marker){motion.delete(hex);continue}
+  const t=Math.min(1,(now-m.start)/m.duration),f=smoothstep(Math.max(0,t));
+  const lat=m.from[0]+(m.to[0]-m.from[0])*f;
+  let dl=m.to[1]-m.from[1];if(dl>180)dl-=360;if(dl< -180)dl+=360;
+  const lon=m.from[1]+dl*f;
+  marker.setLatLng([lat,lon]);
+  if(follow&&sel===hex&&t<1)map.panTo([lat,lon],{animate:false});
+  if(t>=1)motion.delete(hex);
+ }
+ requestAnimationFrame(animateAircraft);
+}
+requestAnimationFrame(animateAircraft);
 function draw(){
  const seen=new Set();
  data.filter(vis).forEach(a=>{
   seen.add(a.hex);const c=COL[kind(a)],s=a.hex===sel?" s":"";
   const icon=L.divIcon({className:"",iconSize:[0,0],html:`<div class="pl${s}"><svg viewBox="0 0 24 24" fill="${c}" stroke="#000" stroke-width=".6" style="transform:rotate(${a.track||0}deg)">${PLANE}</svg><div class="lb" style="color:${c}">${esc(nm(a))}<br>${alt(a)}${a.alt_baro==="ground"?"":" ft"}<br>${a.gs!=null?Math.round(a.gs)+" kt":""}</div></div>`});
-  if(mk[a.hex])mk[a.hex].setLatLng([a.lat,a.lon]).setIcon(icon);else mk[a.hex]=L.marker([a.lat,a.lon],{icon}).addTo(acL).on("click",()=>pick(a.hex));
+  if(mk[a.hex]){
+   const pos=mk[a.hex].getLatLng(),changed=Math.abs(pos.lat-a.lat)>0.000001||Math.abs(pos.lng-a.lon)>0.000001;
+   mk[a.hex].setIcon(icon);
+   if(changed)motion.set(a.hex,{from:[pos.lat,pos.lng],to:[a.lat,a.lon],start:performance.now(),duration:Math.max(1000,Math.min(10000,Math.max(10,cfg.poll)*1000-350))});
+   else motion.delete(a.hex);
+  }else mk[a.hex]=L.marker([a.lat,a.lon],{icon}).addTo(acL).on("click",()=>pick(a.hex));
  });
- Object.keys(mk).forEach(h=>{if(!seen.has(h)){acL.removeLayer(mk[h]);delete mk[h]}});
+ Object.keys(mk).forEach(h=>{if(!seen.has(h)){acL.removeLayer(mk[h]);motion.delete(h);delete mk[h]}});
  trL.clearLayers();
  const a=data.find(x=>x.hex===sel);
  if(a&&trailOn&&trails[sel])L.polyline(trails[sel],{color:"#38bdf8",weight:3}).addTo(trL);
- if(a&&follow)map.panTo([a.lat,a.lon]);
+ if(a&&follow&&!motion.has(a.hex))map.panTo([a.lat,a.lon],{animate:false});
  renderSel();if(view==="traffic"||view==="search")renderView();
 }
 function pick(h){sel=h;const a=data.find(x=>x.hex===h);if(a)map.panTo([a.lat,a.lon]);draw()}
