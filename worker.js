@@ -1,109 +1,155 @@
-// Cloudflare Worker: ADS-B relay for the Flight Display page.
-// Fetches aircraft near a point from free community feeds (server-side, so the
-// browser never has to talk to them directly) and returns the JSON with CORS enabled.
-// Usage: https://YOUR-WORKER.workers.dev/?lat=43.57&lon=-71.42&r=50
+// Cloudflare Worker backend for the Flight Display page. Serves, on your own domain:
+//   /api/aircraft?lat=&lon=&r=      live aircraft near a point (adsb.lol -> adsb.fi -> adsb.one)
+//   /api/search?query=DAL123        find any aircraft worldwide by callsign, registration or ICAO hex
+//   /api/plan?ident=DAL123&hex=...  filed route (FlightAware, needs a key) + flown path (ADS-B trace)
+//   /api/metar?ids=KLCI,KCON        METARs from aviationweather.gov
+//   /api/route?callsign=DAL123      origin/destination from adsbdb (kept for older pages)
+// Optional secret: AEROAPI_KEY (FlightAware AeroAPI key) enables the real filed route.
 
-const SOURCES = [
+const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, OPTIONS", "Content-Type": "application/json" };
+const json = (o, status = 200, ttl = 0) => new Response(JSON.stringify(o), { status, headers: { ...CORS, ...(ttl ? { "Cache-Control": "public, max-age=" + ttl } : {}) } });
+const UA = { "User-Agent": "flight-display/1.0 (personal project)" };
+const get = (url, ttl = 5, headers = {}) => fetch(url, { headers: { ...UA, ...headers }, cf: { cacheTtl: ttl, cacheEverything: true } });
+const num = (v) => (v !== null && v !== undefined && v !== "" && Number.isFinite(Number(v)) ? Number(v) : null);
+const thin = (a, n) => (a.length <= n ? a : a.filter((_, i) => i % Math.ceil(a.length / n) === 0 || i === a.length - 1));
+
+const AIR = [
   (la, lo, r) => `https://api.adsb.lol/v2/point/${la}/${lo}/${r}`,
   (la, lo, r) => `https://opendata.adsb.fi/api/v2/lat/${la}/lon/${lo}/dist/${r}`,
   (la, lo, r) => `https://api.adsb.one/v2/point/${la}/${lo}/${r}`,
 ];
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
-  "Content-Type": "application/json",
-};
+const FIND = [
+  ["adsb.lol", "https://api.adsb.lol/v2", { hex: "hex", cs: "callsign", reg: "reg" }],
+  ["adsb.fi", "https://opendata.adsb.fi/api/v2", { hex: "hex", cs: "callsign", reg: "registration" }],
+  ["adsb.one", "https://api.adsb.one/v2", { hex: "hex", cs: "callsign", reg: "reg" }],
+];
+
+async function search(raw) {
+  const q = raw.toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 12);
+  if (q.length < 3) return { ac: [], source: null, error: "query too short" };
+  const kinds = /^[0-9A-F]{6}$/.test(q) ? ["hex", "cs", "reg"] : ["cs", "reg"];
+  for (const [name, base, paths] of FIND) {
+    for (const k of kinds) {
+      try {
+        const r = await get(`${base}/${paths[k]}/${q}`, 5);
+        if (!r.ok) continue;
+        const j = await r.json();
+        const ac = (j.ac || j.aircraft || []).filter((a) => a.lat != null && a.lon != null);
+        if (ac.length) return { ac, source: name };
+      } catch (e) { /* try next */ }
+    }
+  }
+  return { ac: [], source: null };
+}
+
+async function plan(env, ident, hex) {
+  const out = { ident, origin: null, destination: null, airline: null, route: "", filed: [], actual: [], sources: {} };
+  const apt = (a, fix) => a ? { icao: a.code_icao || a.code || null, iata: a.code_iata || null, name: a.name || null, city: a.city || null, latitude: fix ? num(fix.latitude) : null, longitude: fix ? num(fix.longitude) : null } : null;
+  let faTrack = [];
+
+  // 1) Filed route from FlightAware AeroAPI (only if a key is configured)
+  if (env.AEROAPI_KEY) {
+    try {
+      const h = { "x-apikey": env.AEROAPI_KEY };
+      const fa = (u) => get("https://aeroapi.flightaware.com/aeroapi" + u, 300, h);
+      const r = await fa(`/flights/${encodeURIComponent(ident)}?max_pages=1`);
+      if (r.ok) {
+        const flights = (await r.json()).flights || [];
+        const f = flights.find((x) => x.actual_off && !x.actual_on) || flights.find((x) => x.actual_off) || flights[0];
+        if (f && f.fa_flight_id) {
+          const [rr, tr] = await Promise.all([fa(`/flights/${f.fa_flight_id}/route`), fa(`/flights/${f.fa_flight_id}/track`)]);
+          const rj = rr.ok ? await rr.json() : {};
+          const fixes = (rj.fixes || []).filter((x) => num(x.latitude) !== null && num(x.longitude) !== null);
+          out.origin = apt(f.origin, fixes[0]);
+          out.destination = apt(f.destination, fixes[fixes.length - 1]);
+          out.airline = f.operator || null;
+          out.route = f.route || "";
+          out.filed = fixes.map((x) => [num(x.latitude), num(x.longitude), x.name || ""]);
+          if (out.filed.length > 1) out.sources.filed = "FlightAware";
+          if (tr.ok) faTrack = ((await tr.json()).positions || []).map((p) => [num(p.latitude), num(p.longitude)]).filter((p) => p[0] !== null && p[1] !== null);
+        }
+      }
+    } catch (e) { /* fall through to free sources */ }
+  }
+
+  // 2) Airports from adsbdb when no filed route/coordinates are available
+  const okA = (a) => a && a.latitude !== null && a.longitude !== null;
+  if (!okA(out.origin) || !okA(out.destination)) {
+    try {
+      const r = await get(`https://api.adsbdb.com/v0/callsign/${encodeURIComponent(ident)}`, 3600);
+      if (r.ok) {
+        const fr = ((await r.json()).response || {}).flightroute;
+        if (fr && fr.origin && fr.destination) {
+          const m = (a) => ({ icao: a.icao_code, iata: a.iata_code, name: a.name, city: a.municipality, latitude: num(a.latitude), longitude: num(a.longitude) });
+          out.origin = m(fr.origin); out.destination = m(fr.destination);
+          out.airline = out.airline || (fr.airline && fr.airline.name) || null;
+          out.sources.airports = "adsbdb";
+        }
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  // 3) Flown path: ADS-B trace history (adsb.lol), else FlightAware track
+  if (/^[0-9a-f]{6}$/i.test(hex || "")) {
+    const h = hex.toLowerCase();
+    for (const base of ["https://globe.adsb.lol", "https://adsb.lol"]) {
+      try {
+        const r = await get(`${base}/data/traces/${h.slice(-2)}/trace_full_${h}.json`, 30);
+        if (!r.ok) continue;
+        const pts = ((await r.json()).trace || []).filter((p) => num(p[1]) !== null && num(p[2]) !== null).map((p) => [p[1], p[2]]);
+        if (pts.length > 1) { out.actual = thin(pts, 400); out.sources.actual = "adsb.lol"; break; }
+      } catch (e) { /* try next */ }
+    }
+  }
+  if (out.actual.length < 2 && faTrack.length > 1) { out.actual = thin(faTrack, 400); out.sources.actual = "FlightAware"; }
+  return out;
+}
 
 export default {
   async fetch(request, env) {
     if (request.method === "OPTIONS") return new Response(null, { headers: CORS });
-    const u = new URL(request.url);
-    // /metar?ids=KLCI,KCON  -> aviationweather.gov METARs (includes flight category)
-    if (u.pathname === "/api/metar" || u.pathname === "/metar") {
-      const ids = (u.searchParams.get("ids") || "").replace(/[^A-Za-z0-9,]/g, "").slice(0, 200);
-      if (!ids) return new Response(JSON.stringify({ error: "ids required" }), { status: 400, headers: CORS });
+    const u = new URL(request.url), q = u.searchParams, p = u.pathname;
+    if (!p.startsWith("/api/")) return env.ASSETS.fetch(request);
+
+    if (/\/search$/.test(p)) return json(await search(q.get("query") || ""), 200, 5);
+
+    if (/\/plan$/.test(p)) {
+      const ident = (q.get("ident") || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 10).toUpperCase();
+      if (!ident) return json({ error: "ident required" }, 400);
+      return json(await plan(env || {}, ident, q.get("hex") || ""), 200, 60);
+    }
+
+    if (/\/route$/.test(p)) {
+      const cs = (q.get("callsign") || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 10);
+      if (!cs) return json({ error: "callsign required" }, 400);
       try {
-        const up = await fetch(`https://aviationweather.gov/api/data/metar?format=json&ids=${ids}`, {
-          headers: { "User-Agent": "flight-display/1.0 (personal project)" },
-          cf: { cacheTtl: 60, cacheEverything: true },
-        });
+        const up = await get(`https://api.adsbdb.com/v0/callsign/${cs}`, 3600);
+        return new Response(await up.text(), { status: up.status, headers: { ...CORS, "Cache-Control": "public, max-age=3600" } });
+      } catch (e) { return json({ error: "route fetch failed" }, 502); }
+    }
+
+    if (/\/metar$/.test(p)) {
+      const ids = (q.get("ids") || "").replace(/[^A-Za-z0-9,]/g, "").slice(0, 200);
+      if (!ids) return json({ error: "ids required" }, 400);
+      try {
+        const up = await get(`https://aviationweather.gov/api/data/metar?format=json&ids=${ids}`, 60);
         return new Response(await up.text(), { status: up.status, headers: { ...CORS, "Cache-Control": "public, max-age=60" } });
-      } catch (e) {
-        return new Response(JSON.stringify({ error: "metar fetch failed" }), { status: 502, headers: CORS });
-      }
+      } catch (e) { return json({ error: "metar fetch failed" }, 502); }
     }
-    // ADSBdb reports origin/destination metadata, not an actual filed ATC route.
-    if (u.pathname === "/api/route") {
-      const cs=(u.searchParams.get("callsign")||"").trim().toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,12);
-      if(!cs)return Response.json({error:"callsign required"},{status:400});
-      try {
-        const up=await fetch("https://api.adsbdb.com/v0/callsign/"+encodeURIComponent(cs),{
-          headers:{"Accept":"application/json"},
-          signal:AbortSignal.timeout(8000),
-          cf:{cacheTtl:3600,cacheEverything:true}
-        });
-        const response=await up.text();
-        return new Response(response,{status:up.status,headers:{"Content-Type":up.headers.get("content-type")||"application/json","Cache-Control":up.ok?"public, max-age=3600":"no-store"}});
-      }catch(e){return Response.json({error:"Route metadata provider unavailable"},{status:502,headers:{"Cache-Control":"no-store"}})}
-    }
-    if (u.pathname === "/api/search") {
-      const query=(u.searchParams.get("query")||"").trim().toUpperCase();
-      if(!/^[A-Z0-9-]{3,12}$/.test(query))return Response.json({error:"Invalid callsign, registration or hex"},{status:400});
-      // Identity lookups are provider-wide, not restricted to the home radar.
-      // Try callsign and registration separately; e.g. NKS123 is a callsign,
-      // while N123AB is a registration.
-      const isHex=/^[0-9A-F]{6}$/.test(query);
-      const modes=isHex?["icao"]:["callsign","registration"];
-      const attempts=[];
-      let sawValidEmpty=false;
-      const candidates=[
-        {name:"adsb.lol",root:"https://api.adsb.lol/v2/",registration:"reg"},
-        {name:"adsb.fi",root:"https://opendata.adsb.fi/api/v2/",registration:"registration"},
-        {name:"adsb.one",root:"https://api.adsb.one/v2/",registration:"reg"},
-        {name:"airplanes.live",root:"https://api.airplanes.live/v2/",registration:"reg"}
-      ];
-      for(const mode of modes){
-        for(const provider of candidates){
-          const path=mode==="registration"?provider.registration:mode;
-          try{
-            const response=await fetch(provider.root+path+"/"+encodeURIComponent(query),{
-              headers:{"Accept":"application/json"},
-              signal:AbortSignal.timeout(6500)
-            });
-            if(!response.ok){attempts.push(provider.name+" "+mode+": HTTP "+response.status);continue}
-            const json=await response.json();
-            if(!Array.isArray(json.ac)){attempts.push(provider.name+" "+mode+": invalid format");continue}
-            if(json.ac.length){
-              return Response.json({ac:json.ac,source:provider.name,search_mode:mode},{headers:{"Cache-Control":"public,max-age=10"}});
-            }
-            sawValidEmpty=true;
-          }catch(e){attempts.push(provider.name+" "+mode+": "+String(e).slice(0,75))}
-        }
-      }
-      if(sawValidEmpty)return Response.json({ac:[],source:"internet",search_mode:"identity"},{headers:{"Cache-Control":"public,max-age=10"}});
-      return Response.json({error:"Live aircraft search unavailable from this server; providers may restrict Cloudflare requests",attempts},{status:503,headers:{"Cache-Control":"no-store"}});
-    }
-    if (u.pathname !== "/api/aircraft" && u.pathname !== "/") return env.ASSETS.fetch(request);
-    if (u.pathname === "/" && !u.searchParams.has("lat")) return env.ASSETS.fetch(request);
-    const q = u.searchParams;
+
+    // default: aircraft near a point
     const lat = parseFloat(q.get("lat")), lon = parseFloat(q.get("lon"));
     const r = Math.min(250, Math.max(1, parseInt(q.get("r") || "50", 10) || 50));
-    if (isNaN(lat) || isNaN(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
-      return new Response(JSON.stringify({ error: "lat and lon required" }), { status: 400, headers: CORS });
-    }
-    // Snap to a ~3 NM grid so several displays share one cached upstream request.
-    const la = (Math.round(lat * 20) / 20).toFixed(2);
-    const lo = (Math.round(lon * 20) / 20).toFixed(2);
-    for (const src of SOURCES) {
+    if (isNaN(lat) || isNaN(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return json({ error: "lat and lon required" }, 400);
+    const la = (Math.round(lat * 20) / 20).toFixed(2), lo = (Math.round(lon * 20) / 20).toFixed(2);
+    const attempts = [];
+    for (const src of AIR) {
       try {
-        const up = await fetch(src(la, lo, r), {
-          headers: { "User-Agent": "flight-display/1.0 (personal project)" },
-          cf: { cacheTtl: 5, cacheEverything: true },
-        });
-        if (!up.ok) continue;
+        const up = await get(src(la, lo, r), 5);
+        if (!up.ok) { attempts.push({ provider: new URL(src(la, lo, r)).hostname, status: up.status }); continue; }
         return new Response(await up.text(), { headers: { ...CORS, "Cache-Control": "public, max-age=5" } });
-      } catch (e) { /* try next source */ }
+      } catch (e) { attempts.push({ provider: "network", status: 0 }); }
     }
-    return new Response(JSON.stringify({ error: "all sources failed" }), { status: 502, headers: CORS });
+    return json({ error: "all sources failed", attempts }, 502);
   },
 };
