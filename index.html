@@ -81,6 +81,7 @@ let tz;
 const CC={VFR:"#22c55e",MVFR:"#3b82f6",IFR:"#ec4899",LIFR:"#a855f7",NA:"#6b7280"};let cats={};
 let me={lat:cfg.lat??43.5727,lon:cfg.lon??-71.4189,gps:false}, data=[], filter="all", view="traffic", sel=null, follow=false, trailOn=false, src=0, wx=null, trails={}, mk={}, q="";
 let remoteAircraft=null,remoteFoundAt=0,searchError="",searchBusy=false;
+const routeCache=new Map();
 const rad=x=>x*Math.PI/180;
 const dist=(a,b,c,d)=>{const p=rad(c-a),r=rad(d-b),x=Math.sin(p/2)**2+Math.cos(rad(a))*Math.cos(rad(c))*Math.sin(r/2)**2;return 6371000*2*Math.asin(Math.sqrt(x))/NM};
 const dme=a=>dist(me.lat,me.lon,a.lat,a.lon);
@@ -135,6 +136,65 @@ function drawAps(){
 }
 function layers(){const s=(l,on)=>on?l.addTo(map):map.removeLayer(l);s(ringL,cfg.rings);s(apL,cfg.aps);s(radar,cfg.radar)}
 drawHome();drawAps();layers();
+
+// ---------- origin / destination metadata (not a filed flight plan) ----------
+function routeKey(a){return String(a?.flight||"").trim().toUpperCase()}
+async function lookupRoute(a){
+ const cs=routeKey(a);if(!cs)return null;
+ const existing=routeCache.get(cs);
+ if(existing&&Date.now()-existing.time<3600000)return existing.promise;
+ const entry={time:Date.now(),status:"loading",info:null};
+ routeCache.set(cs,entry);
+ entry.promise=(async()=>{
+  try{
+   const response=await fetch("/api/route?callsign="+encodeURIComponent(cs),{signal:AbortSignal.timeout(10000)});
+   if(!response.ok)throw Error("Route service HTTP "+response.status);
+   const json=await response.json(),fr=json?.response?.flightroute;
+   const o=fr?.origin,d=fr?.destination;
+   if(o&&d&&Number.isFinite(Number(o.latitude))&&Number.isFinite(Number(o.longitude))&&Number.isFinite(Number(d.latitude))&&Number.isFinite(Number(d.longitude))){
+    entry.info={origin:o,destination:d,airline:fr.airline};entry.status="ok";
+   }else entry.status="none";
+  }catch(e){entry.status="error";entry.error=String(e)}
+  if(sel&&data.some(x=>x.hex===sel&&routeKey(x)===cs)){draw();renderSel()}
+  return entry;
+ })();
+ return entry.promise;
+}
+function routeDetails(a){
+ const cs=routeKey(a),r=routeCache.get(cs);
+ if(!cs)return '<div class="mu" style="margin-top:8px">No callsign available for airport route lookup.</div>';
+ if(!r)return '<div class="mu" style="margin-top:8px">Select Show Route to look up origin and destination.</div>';
+ if(r.status==="loading")return '<div class="mu" style="margin-top:8px">Looking up origin and destination…</div>';
+ if(r.status==="error")return '<div class="mu" style="margin-top:8px">Airport route lookup unavailable.</div>';
+ if(r.status!=="ok")return '<div class="mu" style="margin-top:8px">No airport route available for this callsign.</div>';
+ const o=r.info.origin,d=r.info.destination;
+ return '<div style="margin-top:8px"><b>'+esc(o.iata_code||o.icao_code||"Origin")+' → '+esc(d.iata_code||d.icao_code||"Destination")+'</b><div class="mu">Approximate airport-to-airport route, not a filed IFR clearance.</div></div>';
+}
+function drawApproximateRoute(a){
+ const info=routeCache.get(routeKey(a))?.info;
+ if(!info)return;
+ const o=info.origin,d=info.destination;
+ const origin=[Number(o.latitude),Number(o.longitude)],destination=[Number(d.latitude),Number(d.longitude)];
+ const line=[];const segments=60;
+ // Great-circle interpolation to avoid drawing a misleading direct lat/lon diagonal.
+ const radian=Math.PI/180,p1=origin[0]*radian,l1=origin[1]*radian,p2=destination[0]*radian,l2=destination[1]*radian;
+ const angle=2*Math.asin(Math.min(1,Math.sqrt(Math.sin((p2-p1)/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin((l2-l1)/2)**2)));
+ if(angle>0){
+  for(let i=0;i<=segments;i++){
+   const t=i/segments,A=Math.sin((1-t)*angle)/Math.sin(angle),B=Math.sin(t*angle)/Math.sin(angle);
+   const x=A*Math.cos(p1)*Math.cos(l1)+B*Math.cos(p2)*Math.cos(l2);
+   const y=A*Math.cos(p1)*Math.sin(l1)+B*Math.cos(p2)*Math.sin(l2);
+   const z=A*Math.sin(p1)+B*Math.sin(p2);
+   let lon=Math.atan2(y,x)/radian;
+   if(line.length)lon+=Math.round((line[line.length-1][1]-lon)/360)*360;
+   line.push([Math.atan2(z,Math.hypot(x,y))/radian,lon]);
+  }
+ }else line.push(origin,destination);
+ L.polyline(line,{color:"#d946ef",weight:3,dashArray:"8 8",opacity:.88,interactive:false}).addTo(trL);
+ for(const [coords,airport] of [[origin,o],[destination,d]]){
+  L.circleMarker(coords,{radius:5,color:"#fff",weight:2,fillColor:"#d946ef",fillOpacity:1}).bindTooltip(String(airport.iata_code||airport.icao_code||"Airport")).addTo(trL);
+ }
+}
 
 // ---------- traffic ----------
 let lastErr="";
@@ -226,16 +286,17 @@ function draw(){
  trL.clearLayers();
  const a=data.find(x=>x.hex===sel);
  if(a&&trailOn&&trails[sel]&&trails[sel].length>1)L.polyline(trails[sel],{color:"#38bdf8",weight:3,dashArray:"7 5"}).addTo(trL);
+ if(a&&trailOn)drawApproximateRoute(a);
  if(a&&follow&&!motion.has(a.hex))map.panTo([a.lat,a.lon],{animate:false});
  renderSel();if(view==="traffic"||view==="search")renderView();
 }
-function pick(h){sel=h;const a=data.find(x=>x.hex===h);if(a)map.panTo([a.lat,a.lon]);draw()}
+function pick(h){sel=h;const a=data.find(x=>x.hex===h);if(a)map.panTo([a.lat,a.lon]);draw();if(a)lookupRoute(a)}
 const card=a=>{const d=dme(a),b=(Math.atan2(Math.sin(rad(a.lon-me.lon))*Math.cos(rad(a.lat)),Math.cos(rad(me.lat))*Math.sin(rad(a.lat))-Math.sin(rad(me.lat))*Math.cos(rad(a.lat))*Math.cos(rad(a.lon-me.lon)))*180/Math.PI+360)%360;return[d,b]};
 function renderSel(){
  const a=data.find(x=>x.hex===sel),el=$("sel");
  if(!a){el.innerHTML=`<h2>Select aircraft</h2><div class="mu">Tap a plane on the map or in the list${sel?" — selected aircraft is out of range":""}</div>`;return}
  const [d,b]=card(a),vr=a.baro_rate;
- el.innerHTML=`${photos[(a.t||"").toUpperCase()]?`<img class="photo" src="${photos[(a.t||"").toUpperCase()]}">`:""}<h2><span style="color:${COL[kind(a)]}">★</span> ${esc(nm(a))}</h2><div class="mu">${esc(a.desc||a.t||"Unknown type")} ${a.r?"• "+esc(a.r):""}</div>
+ el.innerHTML=`${photos[(a.t||"").toUpperCase()]?`<img class="photo" src="${photos[(a.t||"").toUpperCase()]}">`:""}<h2><span style="color:${COL[kind(a)]}">★</span> ${esc(nm(a))}</h2><div class="mu">${esc(a.desc||a.t||"Unknown type")} ${a.r?"• "+esc(a.r):""}</div>${routeDetails(a)}
  <div class="g"><div><span>Altitude</span><b>${alt(a)} ft</b></div><div><span>Squawk</span><b>${esc(a.squawk||"—")}</b></div>
  <div><span>Ground speed</span><b>${a.gs!=null?Math.round(a.gs)+" kt":"—"}</b></div><div><span>Type</span><b>${esc(a.t||"—")}</b></div>
  <div><span>Heading</span><b>${a.track!=null?Math.round(a.track)+"°":"—"}</b></div><div><span>Registration</span><b>${esc(a.r||"—")}</b></div>
@@ -243,9 +304,7 @@ function renderSel(){
  <div><span>ICAO24</span><b>${a.hex.toUpperCase()}</b></div><div><span>Source</span><b class="ok">ADS-B</b></div></div>
  <div class="row"><button id="bF" class="${follow?"on":""}">⊕ Follow</button><button id="bR" class="${trailOn?"on":""}">☷ Show Route</button><button id="bM">ⓘ More Info</button></div>`;
  $("bF").onclick=()=>{follow=!follow;draw()};
- $("bR").onclick=()=>{trailOn=!trailOn;draw();const n=(trails[sel]||[]).length;
-  $("sel").insertAdjacentHTML("beforeend",'<div class="mu" style="margin-top:7px">Showing observed track: '+n+' positions collected since this display started. A filed/planned IFR route is not supplied by the current ADS-B feed.</div>');
- };
+ $("bR").onclick=()=>{trailOn=!trailOn;draw();if(trailOn)lookupRoute(a).then(()=>{if(sel===a.hex&&trailOn)draw()})};
  $("bM").onclick=()=>window.open("https://globe.adsb.lol/?icao="+a.hex,"_blank");
 }
 
@@ -286,7 +345,7 @@ async function lookupFlight(){
   sel=match.hex;follow=true;searchError="Found "+nm(match)+" via "+source+(resolved!==query?" ("+query+" → "+resolved+")":"")+"; showing live position, not a filed flight plan.";
   const t=trails[match.hex]||(trails[match.hex]=[]);t.push([match.lat,match.lon]);
   map.flyTo([match.lat,match.lon],Math.max(map.getZoom(),8));
-  draw();
+  draw();lookupRoute(match);
  }catch(e){searchError="Flight search unavailable: "+e.message}
  finally{searchBusy=false;renderView()}
 }
