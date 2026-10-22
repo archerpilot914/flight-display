@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#050d18">
 <title>Flight Display</title>
-<style>.leaflet-pane,.leaflet-tile,.leaflet-marker-icon,.leaflet-tile-container,.leaflet-pane>svg,.leaflet-pane>canvas,.leaflet-layer{position:absolute;left:0;top:0}.leaflet-container{overflow:hidden}.leaflet-tile{visibility:hidden;user-select:none}.leaflet-tile-loaded{visibility:inherit}.leaflet-zoom-animated{transform-origin:0 0}.leaflet-pane{z-index:400}.leaflet-tile-pane{z-index:200}.leaflet-overlay-pane{z-index:400}.leaflet-marker-pane{z-index:600}.leaflet-map-pane svg{z-index:200}.leaflet-control{position:relative;z-index:800;pointer-events:auto;float:left;clear:both}.leaflet-top,.leaflet-bottom{position:absolute;z-index:1000;pointer-events:none}.leaflet-top{top:0}.leaflet-bottom{bottom:0}.leaflet-left{left:0}.leaflet-right{right:0}.leaflet-right .leaflet-control{float:right}.leaflet-control-zoom a{display:block;width:30px;height:30px;line-height:30px;text-align:center;background:#0a1628;color:#fff;text-decoration:none;border:1px solid #1b3556}.leaflet-control-attribution{background:#0008;color:#aaa;font-size:10px;padding:0 5px}.leaflet-control-attribution a{color:#8ab}.leaflet-marker-icon,.leaflet-interactive{cursor:pointer;pointer-events:auto}.leaflet-zoom-anim .leaflet-zoom-animated{transition:transform .25s cubic-bezier(0,0,.25,1)}.leaflet-fade-anim .leaflet-tile{transition:opacity .2s linear}</style>
+<style>.leaflet-pane,.leaflet-tile,.leaflet-marker-icon,.leaflet-tile-container,.leaflet-pane>svg,.leaflet-pane>canvas,.leaflet-layer{position:absolute;left:0;top:0}.leaflet-container{overflow:hidden}.leaflet-tile{visibility:hidden;user-select:none}.leaflet-tile-loaded{visibility:inherit}.leaflet-zoom-animated{transform-origin:0 0}.leaflet-pane{z-index:400}.leaflet-tile-pane{z-index:200}.leaflet-overlay-pane{z-index:400}.leaflet-marker-pane{z-index:600}.leaflet-tooltip-pane{z-index:650}.leaflet-map-pane svg{z-index:200}.leaflet-control{position:relative;z-index:800;pointer-events:auto;float:left;clear:both}.leaflet-top,.leaflet-bottom{position:absolute;z-index:1000;pointer-events:none}.leaflet-top{top:0}.leaflet-bottom{bottom:0}.leaflet-left{left:0}.leaflet-right{right:0}.leaflet-right .leaflet-control{float:right}.leaflet-control-zoom a{display:block;width:30px;height:30px;line-height:30px;text-align:center;background:#0a1628;color:#fff;text-decoration:none;border:1px solid #1b3556}.leaflet-control-attribution{background:#0008;color:#aaa;font-size:10px;padding:0 5px}.leaflet-control-attribution a{color:#8ab}.leaflet-marker-icon,.leaflet-interactive{cursor:pointer;pointer-events:auto}.leaflet-tooltip{position:absolute;padding:3px 6px;background:#0a1628ee;border:1px solid #4d6a82;border-radius:4px;color:#fff;font-size:12px;font-weight:700;white-space:nowrap;pointer-events:none;user-select:none}.leaflet-zoom-anim .leaflet-zoom-animated{transition:transform .25s cubic-bezier(0,0,.25,1)}.leaflet-fade-anim .leaflet-tile{transition:opacity .2s linear}</style>
 <style>
 :root{--bg:#050d18;--pn:#0a1628;--ln:#1b3556;--tx:#eaf2ff;--mu:#8ba3c4;--ac:#2b7fff;--ok:#34d399;--bad:#f87171;--com:#fbbf24;--ga:#4ade80;--mil:#f87171;--hel:#fb923c}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -80,7 +80,7 @@ const shrink=(f,cb)=>{const r=new FileReader();r.onload=()=>{const i=new Image()
 let tz;
 const CC={VFR:"#22c55e",MVFR:"#3b82f6",IFR:"#ec4899",LIFR:"#a855f7",NA:"#6b7280"};let cats={};
 let me={lat:cfg.lat??43.5727,lon:cfg.lon??-71.4189,gps:false}, data=[], filter="all", view="traffic", sel=null, follow=false, trailOn=false, src=0, wx=null, trails={}, mk={}, q="";
-let remoteAircraft=null,remoteFoundAt=0,searchError="",searchBusy=false;
+let remoteAircraft=null,remoteFoundAt=0,searchError="",searchBusy=false,routePts=[];
 const routeCache=new Map();
 const rad=x=>x*Math.PI/180;
 const dist=(a,b,c,d)=>{const p=rad(c-a),r=rad(d-b),x=Math.sin(p/2)**2+Math.cos(rad(a))*Math.cos(rad(c))*Math.sin(r/2)**2;return 6371000*2*Math.asin(Math.sqrt(x))/NM};
@@ -98,14 +98,15 @@ const HELICOPTER='<path d="M10.2 2.2Q12 .7 13.8 2.2L15.2 4.5L15.2 12Q15.2 15 13.
 const map=L.map("map",{zoomControl:false,attributionControl:true}).setView([me.lat,me.lon],10);
 L.control.zoom({position:"bottomright"}).addTo(map);
 const ES="https://server.arcgisonline.com/ArcGIS/rest/services/",BASES={topo:"World_Topo_Map",street:"World_Street_Map",sat:"World_Imagery",vfr:"World_Topo_Map",tac:"World_Topo_Map",ifrl:"World_Topo_Map",ifrh:"World_Topo_Map"};
-const ATTR='Tiles © Esri • Aircraft: <a href="https://adsb.lol">adsb.lol</a> (ODbL) / <a href="https://adsb.fi">adsb.fi</a> / <a href="https://adsb.one">adsb.one</a> • Not for navigation';
+const ATTR='Tiles © Esri • Aircraft: <a href="https://adsb.lol">adsb.lol</a> (ODbL) / <a href="https://adsb.fi">adsb.fi</a> / <a href="https://adsb.one">adsb.one</a> • Routes: FlightAware / adsbdb • Not for navigation';
 let tl,lab;
 function setBase(k){
  if(!BASES[k])k="topo";if(tl)map.removeLayer(tl);if(lab){map.removeLayer(lab);lab=null}
  const o={maxZoom:18,maxNativeZoom:18,referrerPolicy:"origin",attribution:ATTR};
  tl=L.tileLayer(ES+BASES[k]+"/MapServer/tile/{z}/{y}/{x}",o).addTo(map);
  tl.on("tileerror",()=>{$("mapmsg").style.display="block"});tl.on("tileload",()=>{$("mapmsg").style.display="none"});
- const CH={vfr:["VFR_Sectional",8,12,"FAA VFR Sectional"],tac:["VFR_Terminal",8,12,"FAA VFR Terminal Area Chart"],ifrl:["IFR_AreaLow",6,11,"FAA IFR Enroute Low"],ifrh:["IFR_High",5,10,"FAA IFR Enroute High"]};
+ // [service, min cached level, max cached level, attribution]. Levels verified against each FAA service's published tile cache (TAC 10-12, IFR Low 7-12, IFR High 5-9).
+ const CH={vfr:["VFR_Sectional",8,12,"FAA VFR Sectional"],tac:["VFR_Terminal",10,12,"FAA VFR Terminal Area Chart"],ifrl:["IFR_AreaLow",7,12,"FAA IFR Enroute Low"],ifrh:["IFR_High",5,9,"FAA IFR Enroute High"]};
  if(CH[k])lab=L.tileLayer("https://tiles.arcgis.com/tiles/ssFJjBXIUyZDrSYZ/arcgis/rest/services/"+CH[k][0]+"/MapServer/tile/{z}/{y}/{x}",{maxZoom:18,minNativeZoom:CH[k][1],maxNativeZoom:CH[k][2],referrerPolicy:"origin",attribution:CH[k][3]}).addTo(map);
  if(k==="sat")lab=L.tileLayer(ES+"Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",{maxZoom:18,maxNativeZoom:18,referrerPolicy:"origin"}).addTo(map);
 }
@@ -122,15 +123,9 @@ function drawAps(){
  apL.clearLayers();
  AP.forEach(([id,n,la,lo])=>{
   const cat=cats[id]||"NA",colour=CC[cat]||CC.NA;
-  // Real Leaflet circle, anchored precisely on the airport coordinates.
-  L.circleMarker([la,lo],{
-   radius:9,color:"#ffffff",weight:2.5,opacity:1,
-   fillColor:colour,fillOpacity:1,
-   className:"airport-flight-rule-dot"
+  L.circleMarker([la,lo],{radius:9,color:"#ffffff",weight:2.5,opacity:1,fillColor:colour,fillOpacity:1,className:"airport-flight-rule-dot"
   }).bindTooltip(id+" · "+(cat==="NA"?"Weather unavailable":cat),{direction:"top"}).on("click",()=>map.setView([la,lo],11)).addTo(apL);
-  // Separate label so the colored dot remains obvious against any map style.
-  L.marker([la,lo],{
-   interactive:false,
+  L.marker([la,lo],{interactive:false,
    icon:L.divIcon({className:"airport-label-marker",iconSize:[0,0],
     html:`<div class="airport-label"><b>${id}</b> <small style="color:${colour}">${cat==="NA"?"":cat}</small></div>`})
   }).addTo(apL);
@@ -139,64 +134,74 @@ function drawAps(){
 function layers(){const s=(l,on)=>on?l.addTo(map):map.removeLayer(l);s(ringL,cfg.rings);s(apL,cfg.aps);s(radar,cfg.radar)}
 drawHome();drawAps();layers();
 
-// ---------- origin / destination metadata (not a filed flight plan) ----------
-function routeKey(a){return String(a?.flight||"").trim().toUpperCase()}
-async function lookupRoute(a){
+// ---------- filed route + flown path ----------
+// /api/plan returns: origin/destination, filed [[lat,lon,name]...] (FlightAware key needed), actual [[lat,lon]...] (ADS-B history).
+function routeKey(a){return String(a?.flight||a?.r||"").trim().toUpperCase()}
+async function lookupRoute(a,force){
  const cs=routeKey(a);if(!cs)return null;
- const existing=routeCache.get(cs);
- if(existing&&Date.now()-existing.time<3600000)return existing.promise;
+ const old=routeCache.get(cs);
+ if(old&&(old.status==="loading"||(!force&&Date.now()-old.time<180000)))return old.promise;
  const entry={time:Date.now(),status:"loading",info:null};
  routeCache.set(cs,entry);
  entry.promise=(async()=>{
   try{
-   const response=await fetch("/api/route?callsign="+encodeURIComponent(cs),{signal:AbortSignal.timeout(10000)});
-   if(!response.ok)throw Error("Route service HTTP "+response.status);
-   const json=await response.json(),fr=json?.response?.flightroute;
-   const o=fr?.origin,d=fr?.destination;
-   if(o&&d&&Number.isFinite(Number(o.latitude))&&Number.isFinite(Number(o.longitude))&&Number.isFinite(Number(d.latitude))&&Number.isFinite(Number(d.longitude))){
-    entry.info={origin:o,destination:d,airline:fr.airline};entry.status="ok";
-   }else entry.status="none";
+   const res=await fetch("/api/plan?ident="+encodeURIComponent(cs)+"&hex="+encodeURIComponent(a.hex||""),{signal:AbortSignal.timeout(25000)});
+   if(!res.ok)throw Error("Plan service HTTP "+res.status);
+   const j=await res.json();
+   const hasA=p=>p&&Number.isFinite(Number(p.latitude))&&Number.isFinite(Number(p.longitude));
+   entry.info=j;
+   entry.status=((j.filed&&j.filed.length>1)||(hasA(j.origin)&&hasA(j.destination))||(j.actual&&j.actual.length>1))?"ok":"none";
   }catch(e){entry.status="error";entry.error=String(e)}
   if(sel&&data.some(x=>x.hex===sel&&routeKey(x)===cs)){draw();renderSel()}
   return entry;
  })();
  return entry.promise;
 }
+function filedKind(i){return i&&i.filed&&i.filed.length>1}
 function routeDetails(a){
- const cs=routeKey(a),r=routeCache.get(cs);
- if(!cs)return '<div class="mu" style="margin-top:8px">No callsign available for airport route lookup.</div>';
- if(!r)return '<div class="mu" style="margin-top:8px">Select Show Route to look up origin and destination.</div>';
- if(r.status==="loading")return '<div class="mu" style="margin-top:8px">Looking up origin and destination…</div>';
- if(r.status==="error")return '<div class="mu" style="margin-top:8px">Airport route lookup unavailable.</div>';
- if(r.status!=="ok")return '<div class="mu" style="margin-top:8px">No airport route available for this callsign.</div>';
- const o=r.info.origin,d=r.info.destination;
- return '<div style="margin-top:8px"><b>'+esc(o.iata_code||o.icao_code||"Origin")+' → '+esc(d.iata_code||d.icao_code||"Destination")+'</b><div class="mu">Approximate airport-to-airport route, not a filed IFR clearance.</div></div>';
+ const cs=routeKey(a),r=routeCache.get(cs),m='<div class="mu" style="margin-top:8px">';
+ if(!cs)return m+'No callsign or registration to look up a route.</div>';
+ if(!r)return m+'Select Show Route to load the filed route and flown path.</div>';
+ if(r.status==="loading")return m+'Loading filed route and flown path…</div>';
+ if(r.status==="error")return m+'Route lookup unavailable.</div>';
+ if(r.status!=="ok")return m+'No route data found for this flight.</div>';
+ const i=r.info,code=p=>p&&(p.iata||p.icao||"");
+ const kindTxt=filedKind(i)?"Filed route ("+esc((i.sources&&i.sources.filed)||"FlightAware")+")":"Airport-to-airport only (no filed route; add a FlightAware key)";
+ return '<div style="margin-top:8px"><b>'+esc(code(i.origin)||"?")+' → '+esc(code(i.destination)||"?")+'</b>'+(i.airline?' <span class="mu">'+esc(i.airline)+'</span>':'')+
+  '<div class="mu">'+kindTxt+(i.route?': '+esc(String(i.route).slice(0,150)):'')+'</div>'+
+  '<div class="mu">Pink dashed = '+(filedKind(i)?'filed route':'great-circle estimate')+' • Blue = flown path'+(i.sources&&i.sources.actual?' ('+esc(i.sources.actual)+')':' (recorded since you opened this page)')+'</div></div>';
 }
-function drawApproximateRoute(a){
- const info=routeCache.get(routeKey(a))?.info;
- if(!info)return;
- const o=info.origin,d=info.destination;
- const origin=[Number(o.latitude),Number(o.longitude)],destination=[Number(d.latitude),Number(d.longitude)];
- const line=[];const segments=60;
- // Great-circle interpolation to avoid drawing a misleading direct lat/lon diagonal.
- const radian=Math.PI/180,p1=origin[0]*radian,l1=origin[1]*radian,p2=destination[0]*radian,l2=destination[1]*radian;
+function gcLine(o,d){
+ const line=[],segments=60,radian=Math.PI/180,p1=o[0]*radian,l1=o[1]*radian,p2=d[0]*radian,l2=d[1]*radian;
  const angle=2*Math.asin(Math.min(1,Math.sqrt(Math.sin((p2-p1)/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin((l2-l1)/2)**2)));
- if(angle>0){
-  for(let i=0;i<=segments;i++){
-   const t=i/segments,A=Math.sin((1-t)*angle)/Math.sin(angle),B=Math.sin(t*angle)/Math.sin(angle);
-   const x=A*Math.cos(p1)*Math.cos(l1)+B*Math.cos(p2)*Math.cos(l2);
-   const y=A*Math.cos(p1)*Math.sin(l1)+B*Math.cos(p2)*Math.sin(l2);
-   const z=A*Math.sin(p1)+B*Math.sin(p2);
-   let lon=Math.atan2(y,x)/radian;
-   if(line.length)lon+=Math.round((line[line.length-1][1]-lon)/360)*360;
-   line.push([Math.atan2(z,Math.hypot(x,y))/radian,lon]);
-  }
- }else line.push(origin,destination);
- L.polyline(line,{color:"#d946ef",weight:3,dashArray:"8 8",opacity:.88,interactive:false}).addTo(trL);
- for(const [coords,airport] of [[origin,o],[destination,d]]){
-  L.circleMarker(coords,{radius:5,color:"#fff",weight:2,fillColor:"#d946ef",fillOpacity:1}).bindTooltip(String(airport.iata_code||airport.icao_code||"Airport")).addTo(trL);
+ if(!angle)return[o,d];
+ for(let i=0;i<=segments;i++){
+  const t=i/segments,A=Math.sin((1-t)*angle)/Math.sin(angle),B=Math.sin(t*angle)/Math.sin(angle);
+  const x=A*Math.cos(p1)*Math.cos(l1)+B*Math.cos(p2)*Math.cos(l2),y=A*Math.cos(p1)*Math.sin(l1)+B*Math.cos(p2)*Math.sin(l2),z=A*Math.sin(p1)+B*Math.sin(p2);
+  let lon=Math.atan2(y,x)/radian;if(line.length)lon+=Math.round((line[line.length-1][1]-lon)/360)*360;
+  line.push([Math.atan2(z,Math.hypot(x,y))/radian,lon]);
  }
+ return line;
 }
+function drawFlightPlan(a){
+ const e=routeCache.get(routeKey(a)),info=e&&e.info,pts=[];
+ const okp=p=>p&&Number.isFinite(Number(p.latitude))&&Number.isFinite(Number(p.longitude));
+ let actual=[];
+ if(info){
+  const filed=(info.filed||[]).filter(p=>Number.isFinite(p[0])&&Number.isFinite(p[1]));
+  const o=okp(info.origin)?[+info.origin.latitude,+info.origin.longitude]:null,d=okp(info.destination)?[+info.destination.latitude,+info.destination.longitude]:null;
+  let plan=filed.map(p=>[p[0],p[1]]);
+  if(plan.length<2&&o&&d)plan=gcLine(o,d);
+  if(plan.length>1){L.polyline(plan,{color:"#d946ef",weight:3,dashArray:"8 8",opacity:.9,interactive:false}).addTo(trL);pts.push(...plan)}
+  filed.forEach(p=>{if(p[2])L.circleMarker([p[0],p[1]],{radius:3,color:"#fff",weight:1,fillColor:"#d946ef",fillOpacity:1}).bindTooltip(String(p[2])).addTo(trL)});
+  [[o,info.origin],[d,info.destination]].forEach(([c,x])=>{if(c)L.circleMarker(c,{radius:6,color:"#fff",weight:2,fillColor:"#d946ef",fillOpacity:1}).bindTooltip(String(x.iata||x.icao||"Airport")).addTo(trL)});
+  actual=(info.actual||[]).filter(p=>Number.isFinite(p[0])&&Number.isFinite(p[1]));
+ }
+ if(actual.length<2)actual=trails[a.hex]||[];
+ if(actual.length>1){const line=actual.concat([[a.lat,a.lon]]);L.polyline(line,{color:"#38bdf8",weight:3.5,opacity:.95,interactive:false}).addTo(trL);pts.push(...line)}
+ pts.push([a.lat,a.lon]);routePts=pts;
+}
+function fitRoute(){if(follow||["vfr","tac","ifrl","ifrh"].includes(cfg.base)||routePts.length<2)return;map.fitBounds(routePts,{padding:[70,70],maxZoom:10})}
 
 // ---------- traffic ----------
 let lastErr="";
@@ -223,7 +228,9 @@ async function loadInner(){const errs=[];
  console.warn("Aircraft sources unavailable",errs);
 }
 async function updateFollowedAircraft(){
- if(!follow||!sel||!/^[0-9a-f]{6}$/i.test(sel))return;
+ // Keep a followed aircraft, or one found by search from far away, updating even when it is outside the local feed.
+ if(!sel||!/^[0-9a-f]{6}$/i.test(sel))return;
+ if(!follow&&!(remoteAircraft&&remoteAircraft.hex===sel))return;
  try{
   const res=await fetch("/api/search?query="+encodeURIComponent(sel),{signal:AbortSignal.timeout(8500),cache:"no-store"});
   if(!res.ok)return;
@@ -257,7 +264,6 @@ function animateAircraft(now){
   for(const [hex,m] of motion){
    const marker=mk[hex];if(!marker){motion.delete(hex);continue}
    const elapsed=Math.max(0,(now-m.time)/1000);
-   // Avoid pretending stale data is still live.
    const forward=Math.min(elapsed,maxPredictionSeconds);
    const predicted=projectPosition(m.report.lat,m.report.lon,m.report.gs,m.report.track,forward);
    const correction=Math.min(1,elapsed/2);
@@ -287,12 +293,11 @@ function draw(){
  Object.keys(mk).forEach(h=>{if(!seen.has(h)){acL.removeLayer(mk[h]);motion.delete(h);delete mk[h]}});
  trL.clearLayers();
  const a=data.find(x=>x.hex===sel);
- if(a&&trailOn&&trails[sel]&&trails[sel].length>1)L.polyline(trails[sel],{color:"#38bdf8",weight:3,dashArray:"7 5"}).addTo(trL);
- if(a&&trailOn)drawApproximateRoute(a);
+ if(a&&trailOn)drawFlightPlan(a);
  if(a&&follow&&!motion.has(a.hex))map.panTo([a.lat,a.lon],{animate:false});
  renderSel();if(view==="traffic"||view==="search")renderView();
 }
-function pick(h){sel=h;const a=data.find(x=>x.hex===h);if(a)map.panTo([a.lat,a.lon]);draw();if(a)lookupRoute(a)}
+function pick(h){sel=h;const a=data.find(x=>x.hex===h);if(a)map.panTo([a.lat,a.lon]);draw()}
 const card=a=>{const d=dme(a),b=(Math.atan2(Math.sin(rad(a.lon-me.lon))*Math.cos(rad(a.lat)),Math.cos(rad(me.lat))*Math.sin(rad(a.lat))-Math.sin(rad(me.lat))*Math.cos(rad(a.lat))*Math.cos(rad(a.lon-me.lon)))*180/Math.PI+360)%360;return[d,b]};
 function renderSel(){
  const a=data.find(x=>x.hex===sel),el=$("sel");
@@ -306,7 +311,7 @@ function renderSel(){
  <div><span>ICAO24</span><b>${a.hex.toUpperCase()}</b></div><div><span>Source</span><b class="ok">ADS-B</b></div></div>
  <div class="row"><button id="bF" class="${follow?"on":""}">⊕ Follow</button><button id="bR" class="${trailOn?"on":""}">☷ Show Route</button><button id="bM">ⓘ More Info</button></div>`;
  $("bF").onclick=()=>{follow=!follow;draw()};
- $("bR").onclick=()=>{trailOn=!trailOn;draw();if(trailOn)lookupRoute(a).then(()=>{if(sel===a.hex&&trailOn)draw()})};
+ $("bR").onclick=()=>{trailOn=!trailOn;draw();if(trailOn)lookupRoute(a,true).then(()=>{if(sel===a.hex&&trailOn){draw();fitRoute()}})};
  $("bM").onclick=()=>window.open("https://globe.adsb.lol/?icao="+a.hex,"_blank");
 }
 
@@ -314,7 +319,6 @@ function renderSel(){
 function rows(list){return list.map(a=>`<tr class="r${a.hex===sel?" s":""}" data-h="${a.hex}"><td style="color:${COL[kind(a)]}">${esc(nm(a))}</td><td>${esc(a.t||"—")}</td><td>${alt(a)}</td><td>${a.gs!=null?Math.round(a.gs):"—"}</td><td>${dme(a).toFixed(1)} NM</td></tr>`).join("")}
 const head="<table><thead><tr><th>Callsign</th><th>Type</th><th>Alt</th><th>Spd</th><th>Dist</th></tr></thead><tbody>";
 // Common IATA airline designators → ICAO callsign prefixes.
-// These cover many North American carriers; airline-operated callsigns can differ.
 const airlineCodes={
  "AA":"AAL","DL":"DAL","UA":"UAL","WN":"SWA","B6":"JBU","AS":"ASA",
  "NK":"NKS","F9":"FFT","G4":"AAY","SY":"SCX","HA":"HAL",
@@ -344,10 +348,13 @@ async function lookupFlight(){
   if(!matches.length){searchError="No currently reporting aircraft found for "+query+(queries.length>1?" (also tried "+queries[0]+")":"");return}
   const match=matches[0];remoteAircraft=match;remoteFoundAt=Date.now();
   data=data.filter(a=>a.hex!==match.hex).concat(match);
-  sel=match.hex;follow=true;searchError="Found "+nm(match)+" via "+source+(resolved!==query?" ("+query+" → "+resolved+")":"")+"; showing live position, not a filed flight plan.";
+  // Show the whole trip (not just a follow-zoom): turn the route on, load the plan, then fit the map to it.
+  sel=match.hex;follow=false;trailOn=true;
+  searchError="Found "+nm(match)+" via "+source+(resolved!==query?" ("+query+" → "+resolved+")":"")+" — loading filed route and flown path…";
   const t=trails[match.hex]||(trails[match.hex]=[]);t.push([match.lat,match.lon]);
   map.flyTo([match.lat,match.lon],Math.max(map.getZoom(),8));
-  draw();lookupRoute(match);
+  draw();
+  lookupRoute(match,true).then(()=>{if(sel===match.hex){searchError="Found "+nm(match)+" via "+source+". Tap Follow to keep it centered.";draw();fitRoute();renderView()}});
  }catch(e){searchError="Flight search unavailable: "+e.message}
  finally{searchBusy=false;renderView()}
 }
@@ -359,7 +366,7 @@ function renderView(){
   $("nr").onchange=e=>{cfg.nr=+e.target.value;save();renderView()};
  }else if(view==="search"){
   const t=q.toLowerCase(),l=t?data.filter(a=>[a.flight,a.r,a.hex,a.t].join(" ").toLowerCase().includes(t)).slice(0,50):[];
-  v.innerHTML=`<b>Find a flight anywhere</b><div class="row" style="margin:7px 0"><input id="qi" placeholder="DL123, UA54, N123AB or ICAO hex" value="${esc(q)}" style="flex:1"><button id="lookup" style="min-width:78px" ${searchBusy?"disabled":""}>${searchBusy?"Searching…":"Search"}</button></div><div class="mu">${esc(searchError||"Use DL123, UA54, AC123, an ICAO callsign, registration, or hex. Searches available live aircraft across provider coverage.")}</div>${t?head+rows(l)+"</tbody></table>":""}`;
+  v.innerHTML=`<b>Find a flight anywhere</b><div class="row" style="margin:7px 0"><input id="qi" placeholder="DL123, UA54, N123AB or ICAO hex" value="${esc(q)}" style="flex:1"><button id="lookup" style="min-width:78px" ${searchBusy?"disabled":""}>${searchBusy?"Searching…":"Search"}</button></div><div class="mu">${esc(searchError||"Use DL123, UA54, AC123, an ICAO callsign, registration, or hex. Finds the aircraft anywhere ADS-B volunteers cover, then draws its filed route and flown path.")}</div>${t?head+rows(l)+"</tbody></table>":""}`;
   const i=$("qi");i.oninput=e=>{q=e.target.value;searchError="";};
   i.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();lookupFlight()}};
   $("lookup").onclick=lookupFlight;
@@ -371,7 +378,7 @@ function renderView(){
   ${wx.raw?`<div class="mu">Raw METAR</div><code style="font-size:12px;word-break:break-word">${esc(wx.raw)}</code>`:""}
   <p class="mu">Voice ATIS/AWOS broadcasts are built from this same METAR data, which is the only free machine-readable form.</p>`:"Weather loading…";
  }else if(view==="layers"){
-  v.innerHTML=`<b>Map style</b><div class="row" style="margin:6px 0 10px;flex-wrap:wrap">${[["topo","Topo"],["street","Street"],["sat","Satellite"],["vfr","VFR Sectional"],["tac","VFR TAC"],["ifrl","IFR Low"],["ifrh","IFR High"]].map(([k,n])=>`<button data-b="${k}" style="flex:1 0 30%" class="${(cfg.base||"topo")===k?"on":""}">${n}</button>`).join("")}</div>`+[["radar","NOAA precipitation radar"],["rings","Distance rings (5/10/25 NM)"],["aps","Airports"]].map(([k,n])=>`<button style="width:100%;margin-bottom:6px" class="${cfg[k]?"on":""}" data-l="${k}">${n}: ${cfg[k]?"ON":"OFF"}</button>`).join("")+'<div class="mu">Radar is NOAA mosaic data, not for flight navigation.</div>';
+  v.innerHTML=`<b>Map style</b><div class="row" style="margin:6px 0 10px;flex-wrap:wrap">${[["topo","Topo"],["street","Street"],["sat","Satellite"],["vfr","VFR Sectional"],["tac","VFR TAC"],["ifrl","IFR Low"],["ifrh","IFR High"]].map(([k,n])=>`<button data-b="${k}" style="flex:1 0 30%" class="${(cfg.base||"topo")===k?"on":""}">${n}</button>`).join("")}</div>`+[["radar","NOAA precipitation radar"],["rings","Distance rings (5/10/25 NM)"],["aps","Airports"]].map(([k,n])=>`<button style="width:100%;margin-bottom:6px" class="${cfg[k]?"on":""}" data-l="${k}">${n}: ${cfg[k]?"ON":"OFF"}</button>`).join("")+'<div class="mu">Radar is NOAA mosaic data, not for flight navigation. TAC charts only exist around large Class B cities; IFR High is shown at low zoom.</div>';
  }else{
   v.innerHTML=`<b>Position</b><div class="mu">${me.gps?"Using live GPS":"GPS not available — using manual/default position"}</div>
   <input id="la" value="${me.lat.toFixed(4)}" inputmode="decimal"><input id="lo" value="${me.lon.toFixed(4)}" inputmode="decimal">
@@ -426,7 +433,7 @@ async function loadWx(){
   const r=await fetch(metarUrl(near.slice(0,4).map(x=>x.id).join(",")));
   const j=await r.json(),m=near.map(n=>j.find(x=>x.icaoId===n.id)).find(Boolean);
   if(!m)throw 0;
-  const top=(m.clouds||[]).filter(c=>c.cover&&c.cover!=="CLR"||true).slice(-1)[0],cv=m.clouds&&m.clouds.length?m.clouds.map(c=>c.cover).includes("OVC")?"OVC":m.clouds.map(c=>c.cover).includes("BKN")?"BKN":m.clouds.map(c=>c.cover).includes("SCT")?"SCT":"FEW":"CLR";
+  const cv=m.clouds&&m.clouds.length?m.clouds.map(c=>c.cover).includes("OVC")?"OVC":m.clouds.map(c=>c.cover).includes("BKN")?"BKN":m.clouds.map(c=>c.cover).includes("SCT")?"SCT":"FEW":"CLR";
   wx={src:"METAR (aviationweather.gov)",id:m.icaoId,name:m.name,temp:F(m.temp),dew:m.dewp!=null?F(m.dewp):null,wind:(m.wdir==="VRB"?"VRB":m.wdir+"°")+" @ "+m.wspd+" kt"+(m.wgst?" G"+m.wgst:""),wdir:m.wdir,wspd:m.wspd,vis:String(m.visib),alt:(m.altim*0.02953).toFixed(2),clouds:(m.clouds||[]).map(c=>c.cover+(c.base?String(Math.round(c.base/100)).padStart(3,"0"):"")).join(" "),raw:m.rawOb,cond:cvTxt[cv],icon:cvIc[cv],time:new Date(m.obsTime*1000).toUTCString().slice(17,22)+"Z"};
  }catch(e){
   try{
