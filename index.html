@@ -35,6 +35,9 @@ input,select{width:100%;padding:9px;background:var(--bg);color:var(--tx);border:
 .lb{position:absolute;left:16px;top:-16px;white-space:nowrap;font-size:12px;line-height:1.2;text-shadow:0 0 3px #000,0 0 3px #000;font-weight:600;background:#0008;padding:1px 4px;border-radius:4px}
 .pl.s svg{filter:drop-shadow(0 0 6px #fff)}
 .ap{background:#0a1628d0;padding:1px 5px 1px 2px;border-radius:9px;display:flex;align-items:center;gap:3px;font-size:12px;font-weight:600;text-shadow:0 0 3px #000;white-space:nowrap}.ap u{width:16px;height:16px;border-radius:50%;background:#1d4ed8;border:2px solid #fff;display:inline-block}
+.airport-flight-rule-dot{filter:drop-shadow(0 0 5px #000) drop-shadow(0 0 3px #fff8)}
+.airport-label{position:absolute;left:13px;top:-10px;display:flex;gap:4px;align-items:center;white-space:nowrap;background:#061729eb;color:#fff;border:1px solid #4d6a82;border-radius:5px;padding:3px 5px;font-size:12px;font-weight:800;text-shadow:0 1px 2px #000;box-shadow:0 2px 6px #0008;pointer-events:none}
+.airport-label small{font-size:10px;font-weight:800}
 .rl{background:#0a1628d0;padding:1px 6px;border-radius:4px;color:#fff;font-size:12px;font-weight:600;text-shadow:0 0 3px #000;white-space:nowrap}
 .me{width:16px;height:16px;border-radius:50%;background:#38bdf8;border:3px solid #fff;margin:-8px 0 0 -8px;box-shadow:0 0 8px #38bdf8}
 #sel .photo{float:right;width:44%;max-height:96px;object-fit:cover;border-radius:6px;margin:0 0 6px 8px}
@@ -111,7 +114,24 @@ function drawHome(){
   L.marker([me.lat+r*NM/111320,me.lon],{interactive:false,icon:L.divIcon({className:"",html:`<div class="rl" style="transform:translate(-50%,-110%)">${r} NM</div>`})}).addTo(ringL)});
  L.marker([me.lat,me.lon],{interactive:false,icon:L.divIcon({className:"",html:'<div class="me"></div>'})}).addTo(meL);
 }
-function drawAps(){apL.clearLayers();AP.forEach(([id,n,la,lo])=>{const cat=cats[id]||"NA",colour=CC[cat]||CC.NA;L.marker([la,lo],{icon:L.divIcon({className:"airport-rule-marker",iconSize:[0,0],html:`<div class="ap" title="${id}: ${cat==="NA"?"METAR unavailable":cat}" style="transform:translate(-8px,-8px)"><u style="background:${colour};box-shadow:0 0 8px ${colour}"></u><b>${id}</b> <small style="color:${colour}">${cat==="NA"?"—":cat}</small></div>`})}).on("click",()=>{map.setView([la,lo],11)}).addTo(apL)})}
+function drawAps(){
+ apL.clearLayers();
+ AP.forEach(([id,n,la,lo])=>{
+  const cat=cats[id]||"NA",colour=CC[cat]||CC.NA;
+  // Real Leaflet circle, anchored precisely on the airport coordinates.
+  L.circleMarker([la,lo],{
+   radius:9,color:"#ffffff",weight:2.5,opacity:1,
+   fillColor:colour,fillOpacity:1,
+   className:"airport-flight-rule-dot"
+  }).bindTooltip(id+" · "+(cat==="NA"?"Weather unavailable":cat),{direction:"top"}).on("click",()=>map.setView([la,lo],11)).addTo(apL);
+  // Separate label so the colored dot remains obvious against any map style.
+  L.marker([la,lo],{
+   interactive:false,
+   icon:L.divIcon({className:"airport-label-marker",iconSize:[0,0],
+    html:`<div class="airport-label"><b>${id}</b> <small style="color:${colour}">${cat==="NA"?"":cat}</small></div>`})
+  }).addTo(apL);
+ });
+}
 function layers(){const s=(l,on)=>on?l.addTo(map):map.removeLayer(l);s(ringL,cfg.rings);s(apL,cfg.aps);s(radar,cfg.radar)}
 drawHome();drawAps();layers();
 
