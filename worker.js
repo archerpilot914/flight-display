@@ -35,24 +35,38 @@ export default {
     if (u.pathname === "/api/search") {
       const query=(u.searchParams.get("query")||"").trim().toUpperCase();
       if(!/^[A-Z0-9-]{3,12}$/.test(query))return Response.json({error:"Invalid callsign, registration or hex"},{status:400});
+      // Identity lookups are provider-wide, not restricted to the home radar.
+      // Try callsign and registration separately; e.g. NKS123 is a callsign,
+      // while N123AB is a registration.
       const isHex=/^[0-9A-F]{6}$/.test(query);
-      const lookup = isHex?"icao":query.startsWith("N")&&/^[N][0-9A-Z-]+$/.test(query)?"reg":"callsign";
+      const modes=isHex?["icao"]:["callsign","registration"];
       const attempts=[];
+      let sawValidEmpty=false;
       const candidates=[
-        ["adsb.lol","https://api.adsb.lol/v2/"],
-        ["adsb.fi","https://opendata.adsb.fi/api/v2/"],
-        ["adsb.one","https://api.adsb.one/v2/"]
+        {name:"adsb.lol",root:"https://api.adsb.lol/v2/",registration:"reg"},
+        {name:"adsb.fi",root:"https://opendata.adsb.fi/api/v2/",registration:"registration"},
+        {name:"adsb.one",root:"https://api.adsb.one/v2/",registration:"reg"}
       ];
-      for(const [provider,root] of candidates){
-        try{
-          const response=await fetch(root+lookup+"/"+encodeURIComponent(query),{headers:{"Accept":"application/json"},signal:AbortSignal.timeout(6500)});
-          if(!response.ok){attempts.push(provider+": HTTP "+response.status);continue}
-          const json=await response.json();
-          if(!Array.isArray(json.ac)){attempts.push(provider+": invalid format");continue}
-          return Response.json({ac:json.ac,source:provider},{headers:{"Cache-Control":"public,max-age=10"}});
-        }catch(e){attempts.push(provider+": "+String(e).slice(0,75))}
+      for(const mode of modes){
+        for(const provider of candidates){
+          const path=mode==="registration"?provider.registration:mode;
+          try{
+            const response=await fetch(provider.root+path+"/"+encodeURIComponent(query),{
+              headers:{"Accept":"application/json"},
+              signal:AbortSignal.timeout(6500)
+            });
+            if(!response.ok){attempts.push(provider.name+" "+mode+": HTTP "+response.status);continue}
+            const json=await response.json();
+            if(!Array.isArray(json.ac)){attempts.push(provider.name+" "+mode+": invalid format");continue}
+            if(json.ac.length){
+              return Response.json({ac:json.ac,source:provider.name,search_mode:mode},{headers:{"Cache-Control":"public,max-age=10"}});
+            }
+            sawValidEmpty=true;
+          }catch(e){attempts.push(provider.name+" "+mode+": "+String(e).slice(0,75))}
+        }
       }
-      return Response.json({error:"Aircraft search providers unavailable",attempts},{status:502,headers:{"Cache-Control":"no-store"}});
+      if(sawValidEmpty)return Response.json({ac:[],source:"internet",search_mode:"identity"},{headers:{"Cache-Control":"public,max-age=10"}});
+      return Response.json({error:"Aircraft identity search providers unavailable",attempts},{status:502,headers:{"Cache-Control":"no-store"}});
     }
     if (u.pathname !== "/api/aircraft" && u.pathname !== "/") return env.ASSETS.fetch(request);
     if (u.pathname === "/" && !u.searchParams.has("lat")) return env.ASSETS.fetch(request);
