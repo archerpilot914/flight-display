@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="utf-8">
+<meta name="referrer" content="origin">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#050d18">
 <title>Flight Display</title>
@@ -33,9 +34,10 @@ input,select{width:100%;padding:9px;background:var(--bg);color:var(--tx);border:
 .pl{position:relative}.pl svg{position:absolute;left:-15px;top:-15px;width:30px;height:30px;filter:drop-shadow(0 0 2px #000)}
 .lb{position:absolute;left:16px;top:-16px;white-space:nowrap;font-size:12px;line-height:1.2;text-shadow:0 0 3px #000,0 0 3px #000;font-weight:600;background:#0008;padding:1px 4px;border-radius:4px}
 .pl.s svg{filter:drop-shadow(0 0 6px #fff)}
-.ap{display:flex;align-items:center;gap:3px;font-size:12px;font-weight:600;text-shadow:0 0 3px #000;white-space:nowrap}.ap u{width:16px;height:16px;border-radius:50%;background:#1d4ed8;border:2px solid #fff;display:inline-block}
-.rl{color:#fff;font-size:12px;font-weight:600;text-shadow:0 0 3px #000;white-space:nowrap}
+.ap{background:#0a1628d0;padding:1px 5px 1px 2px;border-radius:9px;display:flex;align-items:center;gap:3px;font-size:12px;font-weight:600;text-shadow:0 0 3px #000;white-space:nowrap}.ap u{width:16px;height:16px;border-radius:50%;background:#1d4ed8;border:2px solid #fff;display:inline-block}
+.rl{background:#0a1628d0;padding:1px 6px;border-radius:4px;color:#fff;font-size:12px;font-weight:600;text-shadow:0 0 3px #000;white-space:nowrap}
 .me{width:16px;height:16px;border-radius:50%;background:#38bdf8;border:3px solid #fff;margin:-8px 0 0 -8px;box-shadow:0 0 8px #38bdf8}
+#sel .photo{float:right;width:44%;max-height:96px;object-fit:cover;border-radius:6px;margin:0 0 6px 8px}
 @media(max-aspect-ratio:1/1){#app{grid-template-columns:1fr;grid-template-rows:auto 55vh auto 1fr auto;overflow:auto}#top{grid-column:1;overflow-x:auto}#nav{grid-column:1;grid-template-columns:repeat(3,1fr)}html,body{overflow:auto}#app{height:auto}}
 </style></head><body>
 <div id="app">
@@ -50,20 +52,27 @@ input,select{width:100%;padding:9px;background:var(--bg);color:var(--tx);border:
 </div>
 <div id="mapw" class="box"><div id="map"></div>
  <div id="sb"><button data-f="all" class="on"><i>☰</i>All</button><button data-f="com"><i>✈</i>Commercial</button><button data-f="ga"><i style="color:var(--ga)">✈</i>GA</button><button data-f="mil"><i style="color:var(--mil)">✈</i>Military</button><button data-f="heli"><i style="color:var(--hel)">✢</i>Helicopter</button></div>
- <div id="wx">Weather loading…</div></div>
+ <div id="wx">Weather loading…</div><div id="mapmsg" class="box" style="display:none;position:absolute;left:84px;bottom:8px;z-index:900;padding:6px 10px;font-size:12px">Map tiles can’t load — check internet or ad-blocker</div></div>
 <aside id="right"><div id="sel" class="box"></div><div id="view" class="box"></div></aside>
 <nav id="nav"><button data-v="traffic" class="on"><i>✈</i>Traffic</button><button data-v="search"><i>⌕</i>Search Flight</button><button data-v="airports"><i>▥</i>Airports</button><button data-v="weather"><i>☁</i>Weather</button><button data-v="layers"><i>▱</i>Layers</button><button data-v="settings"><i>⚙</i>Settings</button></nav>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
+if(typeof L==="undefined"){document.body.innerHTML='<p style="padding:20px;color:#fff">Map library failed to load. Check your internet connection or ad-blocker.</p>';throw new Error("Leaflet missing")}
 const $=id=>document.getElementById(id), NM=1852, esc=s=>String(s).replace(/[<>&"]/g,"");
 const SOURCES=[ // free, keyless, CORS-enabled ADS-B aggregators (tried in order)
  {n:"adsb.lol",u:(a,b,r)=>`https://api.adsb.lol/v2/point/${a}/${b}/${r}`},
- {n:"airplanes.live",u:(a,b,r)=>`https://api.airplanes.live/v2/point/${a}/${b}/${r}`}];
+ {n:"airplanes.live",u:(a,b,r)=>`https://api.airplanes.live/v2/point/${a}/${b}/${r}`},
+ {n:"OpenSky",min:30000,u:(a,b,r)=>{a=+a;b=+b;const d=r/60,e=d/Math.cos(a*Math.PI/180);return `https://opensky-network.org/api/states/all?lamin=${a-d}&lomin=${b-e}&lamax=${a+d}&lomax=${b+e}`},
+  p:j=>(j.states||[]).filter(t=>t[5]!=null&&t[6]!=null).map(t=>({hex:t[0],flight:(t[1]||"").trim(),lat:t[6],lon:t[5],alt_baro:t[8]?"ground":(t[7]!=null?Math.round(t[7]*3.28084):undefined),gs:t[9]!=null?t[9]*1.94384:undefined,track:t[10],baro_rate:t[11]!=null?Math.round(t[11]*196.85):undefined,squawk:t[14],category:t[17]===8?"A7":""}))}];
 const AP=[["KLCI","Laconia",43.5727,-71.4189],["KCON","Concord",43.2027,-71.5023],["KMHT","Manchester",42.9326,-71.4357],["KASH","Nashua",42.7817,-71.5148],["KPSM","Portsmouth",43.0779,-70.8233],["KSFM","Sanford",43.3939,-70.7088],["KDAW","Rochester",43.2841,-71.0292],["KPWM","Portland",43.6462,-70.3093],["KBOS","Boston Logan",42.3643,-71.0052],["KBED","Hanscom",42.47,-71.289],["KORH","Worcester",42.2673,-71.8757],["KEEN","Keene",42.8984,-72.2708],["KLEB","Lebanon",43.6261,-72.3042]];
 let cfg={poll:15,lat:null,lon:null,radar:true,rings:true,aps:true,nr:25};
 try{Object.assign(cfg,JSON.parse(localStorage.getItem("fdcfg")||"{}"))}catch(e){}
 const save=()=>{try{localStorage.setItem("fdcfg",JSON.stringify(cfg))}catch(e){}};
+let photos={};try{photos=JSON.parse(localStorage.getItem("fdphotos")||"{}")}catch(e){}
+const savePh=()=>{try{localStorage.setItem("fdphotos",JSON.stringify(photos));return true}catch(e){alert("Couldn't save: browser storage is full or blocked. Try a smaller photo.");return false}};
+const shrink=(f,cb)=>{const r=new FileReader();r.onload=()=>{const i=new Image();i.onload=()=>{const w=Math.min(480,i.width),h=Math.round(i.height*w/i.width),c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d").drawImage(i,0,0,w,h);cb(c.toDataURL("image/jpeg",.8))};i.src=r.result};r.readAsDataURL(f)};
+let tz;
 let me={lat:cfg.lat??43.5727,lon:cfg.lon??-71.4189,gps:false}, data=[], filter="all", view="traffic", sel=null, follow=false, trailOn=false, src=0, wx=null, trails={}, mk={}, q="";
 const rad=x=>x*Math.PI/180;
 const dist=(a,b,c,d)=>{const p=rad(c-a),r=rad(d-b),x=Math.sin(p/2)**2+Math.cos(rad(a))*Math.cos(rad(c))*Math.sin(r/2)**2;return 6371000*2*Math.asin(Math.sqrt(x))/NM};
@@ -78,12 +87,24 @@ const PLANE='<path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 
 // ---------- map ----------
 const map=L.map("map",{zoomControl:false,attributionControl:true}).setView([me.lat,me.lon],10);
 L.control.zoom({position:"bottomright"}).addTo(map);
-L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{maxZoom:18,attribution:'© OSM © CARTO • Aircraft: <a href="https://adsb.lol">adsb.lol</a> (ODbL) / <a href="https://airplanes.live">airplanes.live</a> • Not for navigation'}).addTo(map);
-const radar=L.tileLayer.wms("https://opengeo.ncep.noaa.gov/geoserver/conus/conus_bref_qcd/ows",{layers:"conus_bref_qcd",format:"image/png",transparent:true,opacity:.65});
+const ES="https://server.arcgisonline.com/ArcGIS/rest/services/",BASES={topo:"World_Topo_Map",street:"World_Street_Map",sat:"World_Imagery",vfr:"World_Topo_Map",tac:"World_Topo_Map",ifrl:"World_Topo_Map",ifrh:"World_Topo_Map"};
+const ATTR='Tiles © Esri • Aircraft: <a href="https://adsb.lol">adsb.lol</a> (ODbL) / <a href="https://airplanes.live">airplanes.live</a> • Not for navigation';
+let tl,lab;
+function setBase(k){
+ if(!BASES[k])k="topo";if(tl)map.removeLayer(tl);if(lab){map.removeLayer(lab);lab=null}
+ const o={maxZoom:18,maxNativeZoom:18,referrerPolicy:"origin",attribution:ATTR};
+ tl=L.tileLayer(ES+BASES[k]+"/MapServer/tile/{z}/{y}/{x}",o).addTo(map);
+ tl.on("tileerror",()=>{$("mapmsg").style.display="block"});tl.on("tileload",()=>{$("mapmsg").style.display="none"});
+ const CH={vfr:["VFR_Sectional",8,12,"FAA VFR Sectional"],tac:["VFR_Terminal",8,12,"FAA VFR Terminal Area Chart"],ifrl:["IFR_AreaLow",6,11,"FAA IFR Enroute Low"],ifrh:["IFR_High",5,10,"FAA IFR Enroute High"]};
+ if(CH[k])lab=L.tileLayer("https://tiles.arcgis.com/tiles/ssFJjBXIUyZDrSYZ/arcgis/rest/services/"+CH[k][0]+"/MapServer/tile/{z}/{y}/{x}",{maxZoom:18,minNativeZoom:CH[k][1],maxNativeZoom:CH[k][2],referrerPolicy:"origin",attribution:CH[k][3]}).addTo(map);
+ if(k==="sat")lab=L.tileLayer(ES+"Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",{maxZoom:18,maxNativeZoom:18,referrerPolicy:"origin"}).addTo(map);
+}
+setBase(cfg.base);
+const radar=L.tileLayer.wms("https://opengeo.ncep.noaa.gov/geoserver/conus/conus_bref_qcd/ows",{layers:"conus_bref_qcd",format:"image/png",transparent:true,opacity:.65,zIndex:5});
 const ringL=L.layerGroup(), apL=L.layerGroup(), acL=L.layerGroup().addTo(map), trL=L.layerGroup().addTo(map), meL=L.layerGroup().addTo(map);
 function drawHome(){
  ringL.clearLayers();meL.clearLayers();
- [5,10,25].forEach(r=>{L.circle([me.lat,me.lon],{radius:r*NM,color:"#cfe3ff",weight:1.2,dashArray:"6 6",fill:false,opacity:.7}).addTo(ringL);
+ [5,10,25].forEach(r=>{L.circle([me.lat,me.lon],{radius:r*NM,color:cfg.base==="sat"?"#ffffff":"#0b3d91",weight:1.8,dashArray:"6 6",fill:false,opacity:.7}).addTo(ringL);
   L.marker([me.lat+r*NM/111320,me.lon],{interactive:false,icon:L.divIcon({className:"",html:`<div class="rl" style="transform:translate(-50%,-110%)">${r} NM</div>`})}).addTo(ringL)});
  L.marker([me.lat,me.lon],{interactive:false,icon:L.divIcon({className:"",html:'<div class="me"></div>'})}).addTo(meL);
 }
@@ -92,22 +113,25 @@ function layers(){const s=(l,on)=>on?l.addTo(map):map.removeLayer(l);s(ringL,cfg
 drawHome();drawAps();layers();
 
 // ---------- traffic ----------
-async function load(){
+let lastErr="";
+async function loadInner(){const errs=[];
  for(let i=0;i<SOURCES.length;i++){
   const s=SOURCES[(src+i)%SOURCES.length];
+  if(s.min&&Date.now()-(s.last||0)<s.min){errs.push(s.n+" throttled");continue}
   try{
-   const r=await fetch(s.u(me.lat.toFixed(3),me.lon.toFixed(3),50),{cache:"no-store"});
+   s.last=Date.now();const r=await fetch(s.u(me.lat.toFixed(3),me.lon.toFixed(3),50));
    if(!r.ok)throw new Error(r.status);
    const j=await r.json();
-   data=(j.ac||j.aircraft||[]).filter(a=>a.lat!=null&&a.lon!=null);
+   data=(s.p?s.p(j):(j.ac||j.aircraft||[])).filter(a=>a.lat!=null&&a.lon!=null);
    src=(src+i)%SOURCES.length;
    data.forEach(a=>{const t=trails[a.hex]=trails[a.hex]||[],l=t[t.length-1];if(!l||l[0]!=a.lat||l[1]!=a.lon){t.push([a.lat,a.lon]);if(t.length>80)t.shift()}});
    $("sA").className="ok";$("sA").textContent=`Receiving (${s.n})`;
    return draw();
-  }catch(e){console.warn(s.n,e)}
+  }catch(e){console.warn(s.n,e);errs.push(s.n+": "+(e.message||e))}
  }
- $("sA").className="bad";$("sA").textContent="No data — retrying";
+ $("sA").className="bad";$("sA").textContent="No data — "+errs.join(" • ").slice(0,110);
 }
+let busy=false;const load=async()=>{if(busy)return;busy=true;try{await loadInner()}finally{busy=false}};
 let timer;const sched=()=>{clearInterval(timer);timer=setInterval(load,Math.max(10,cfg.poll)*1000)};
 function draw(){
  const seen=new Set();
@@ -129,7 +153,7 @@ function renderSel(){
  const a=data.find(x=>x.hex===sel),el=$("sel");
  if(!a){el.innerHTML=`<h2>Select aircraft</h2><div class="mu">Tap a plane on the map or in the list${sel?" — selected aircraft is out of range":""}</div>`;return}
  const [d,b]=card(a),vr=a.baro_rate;
- el.innerHTML=`<h2><span style="color:${COL[kind(a)]}">★</span> ${esc(nm(a))}</h2><div class="mu">${esc(a.desc||a.t||"Unknown type")} ${a.r?"• "+esc(a.r):""}</div>
+ el.innerHTML=`${photos[(a.t||"").toUpperCase()]?`<img class="photo" src="${photos[(a.t||"").toUpperCase()]}">`:""}<h2><span style="color:${COL[kind(a)]}">★</span> ${esc(nm(a))}</h2><div class="mu">${esc(a.desc||a.t||"Unknown type")} ${a.r?"• "+esc(a.r):""}</div>
  <div class="g"><div><span>Altitude</span><b>${alt(a)} ft</b></div><div><span>Squawk</span><b>${esc(a.squawk||"—")}</b></div>
  <div><span>Ground speed</span><b>${a.gs!=null?Math.round(a.gs)+" kt":"—"}</b></div><div><span>Type</span><b>${esc(a.t||"—")}</b></div>
  <div><span>Heading</span><b>${a.track!=null?Math.round(a.track)+"°":"—"}</b></div><div><span>Registration</span><b>${esc(a.r||"—")}</b></div>
@@ -156,24 +180,30 @@ function renderView(){
  }else if(view==="airports"){
   v.innerHTML="<b>Nearby airports</b><table><tbody>"+AP.map(([id,n,la,lo])=>[id,n,la,lo,dist(me.lat,me.lon,la,lo)]).sort((a,b)=>a[4]-b[4]).map(([id,n,la,lo,d])=>`<tr class="r" data-ap="${la},${lo}"><td><b>${id}</b></td><td>${n}</td><td>${d.toFixed(1)} NM</td></tr>`).join("")+"</tbody></table>";
  }else if(view==="weather"){
-  v.innerHTML=wx?`<b>${esc(wx.id)} ${esc(wx.name||"")}</b><div class="mu">${esc(wx.src)}${wx.time?" • observed "+wx.time:""}</div>
+  v.innerHTML=wx?`<b>${esc(wx.id)} ${esc(wx.name||"")}</b> • ${wx.dist} NM from you<div class="mu">${esc(wx.src)}${wx.time?" • observed "+wx.time:""}</div>
   <div class="g" style="grid-template-columns:1fr"><div><span>Conditions</span><b>${wx.cond}</b></div><div><span>Temp / Dewpoint</span><b>${wx.temp}°F${wx.dew!=null?" / "+wx.dew+"°F":""}</b></div><div><span>Wind</span><b>${wx.wind}</b></div><div><span>Visibility</span><b>${wx.vis} SM</b></div><div><span>Altimeter</span><b>${wx.alt} inHg</b></div><div><span>Clouds</span><b>${esc(wx.clouds||"—")}</b></div></div>
   ${wx.raw?`<div class="mu">Raw METAR</div><code style="font-size:12px;word-break:break-word">${esc(wx.raw)}</code>`:""}
   <p class="mu">Voice ATIS/AWOS broadcasts are built from this same METAR data, which is the only free machine-readable form.</p>`:"Weather loading…";
  }else if(view==="layers"){
-  v.innerHTML=[["radar","NOAA precipitation radar"],["rings","Distance rings (5/10/25 NM)"],["aps","Airports"]].map(([k,n])=>`<button style="width:100%;margin-bottom:6px" class="${cfg[k]?"on":""}" data-l="${k}">${n}: ${cfg[k]?"ON":"OFF"}</button>`).join("")+'<div class="mu">Radar is NOAA mosaic data, not for flight navigation.</div>';
+  v.innerHTML=`<b>Map style</b><div class="row" style="margin:6px 0 10px;flex-wrap:wrap">${[["topo","Topo"],["street","Street"],["sat","Satellite"],["vfr","VFR Sectional"],["tac","VFR TAC"],["ifrl","IFR Low"],["ifrh","IFR High"]].map(([k,n])=>`<button data-b="${k}" style="flex:1 0 30%" class="${(cfg.base||"topo")===k?"on":""}">${n}</button>`).join("")}</div>`+[["radar","NOAA precipitation radar"],["rings","Distance rings (5/10/25 NM)"],["aps","Airports"]].map(([k,n])=>`<button style="width:100%;margin-bottom:6px" class="${cfg[k]?"on":""}" data-l="${k}">${n}: ${cfg[k]?"ON":"OFF"}</button>`).join("")+'<div class="mu">Radar is NOAA mosaic data, not for flight navigation.</div>';
  }else{
   v.innerHTML=`<b>Position</b><div class="mu">${me.gps?"Using live GPS":"GPS not available — using manual/default position"}</div>
   <input id="la" value="${me.lat.toFixed(4)}" inputmode="decimal"><input id="lo" value="${me.lon.toFixed(4)}" inputmode="decimal">
   <button id="ap" style="width:100%">Set position manually (disables GPS follow)</button>
-  <p><b>Refresh interval (seconds, min 10)</b></p><input id="pl" type="number" min="10" value="${cfg.poll}"><button id="ps" style="width:100%">Save</button>`;
+  <p><b>Refresh interval (seconds, min 10)</b></p><input id="pl" type="number" min="10" value="${cfg.poll}"><button id="ps" style="width:100%">Save</button>
+  <p><b>Aircraft photos</b></p><div class="mu">Add a photo for an aircraft type (ICAO type code such as B738 or C172). It shows whenever that type is selected.</div>
+  <input id="pt" placeholder="Type code, e.g. B738" value="${esc((data.find(x=>x.hex===sel)||{}).t||"")}"><input id="pf" type="file" accept="image/*"><button id="pa" style="width:100%">Add photo</button>
+  <div>${Object.entries(photos).map(([t,u])=>`<div class="row" style="align-items:center;margin-top:6px"><img src="${u}" style="width:70px;height:46px;object-fit:cover;border-radius:4px"><b style="flex:2">${esc(t)}</b><button data-dp="${esc(t)}">Delete</button></div>`).join("")}</div>`;
+  $("pa").onclick=()=>{const t=$("pt").value.trim().toUpperCase(),f=$("pf").files[0];if(!t||!f){alert("Enter a type code and choose a photo");return}shrink(f,u=>{const old=photos[t];photos[t]=u;if(!savePh()){if(old)photos[t]=old;else delete photos[t]}renderView();renderSel()})};
+  document.querySelectorAll("[data-dp]").forEach(b=>b.onclick=()=>{delete photos[b.dataset.dp];savePh();renderView();renderSel()});
   $("ap").onclick=()=>{const la=parseFloat($("la").value),lo=parseFloat($("lo").value);if(isNaN(la)||isNaN(lo))return;cfg.lat=la;cfg.lon=lo;save();if(gw!=null){navigator.geolocation.clearWatch(gw);gw=null}setMe(la,lo,false)};
   $("ps").onclick=()=>{cfg.poll=Math.max(10,+$("pl").value||15);save();sched()};
  }
 }
 $("view").addEventListener("click",e=>{
  const r=e.target.closest("tr.r");if(r){if(r.dataset.h)pick(r.dataset.h);else if(r.dataset.ap)map.setView(r.dataset.ap.split(",").map(Number),11)}
- const b=e.target.closest("[data-l]");if(b){cfg[b.dataset.l]=!cfg[b.dataset.l];save();layers();renderView()}});
+ const b=e.target.closest("[data-l]");if(b){cfg[b.dataset.l]=!cfg[b.dataset.l];save();layers();renderView()}
+ const m=e.target.closest("[data-b]");if(m){cfg.base=m.dataset.b;save();setBase(cfg.base);drawHome();renderView()}});
 $("nav").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;view=b.dataset.v;document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("on",x===b));renderView()});
 $("sb").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;filter=b.dataset.f;document.querySelectorAll("#sb button").forEach(x=>x.classList.toggle("on",x===b));draw()});
 
@@ -182,7 +212,7 @@ const cvTxt={CLR:"Clear",SKC:"Clear",FEW:"Mostly Clear",SCT:"Partly Cloudy",BKN:
 const F=c=>Math.round(c*9/5+32);
 async function loadWx(){
  const near=AP.map(a=>({id:a[0],n:a[1],d:dist(me.lat,me.lon,a[2],a[3])})).sort((a,b)=>a.d-b.d);
- $("loc").textContent=near[0].id;$("locn").textContent=near[0].n+", NH";
+ $("loc").textContent=near[0].id;$("locn").textContent=near[0].n+" • "+near[0].d.toFixed(1)+" NM";
  try{
   const r=await fetch("https://aviationweather.gov/api/data/metar?format=json&ids="+near.slice(0,4).map(x=>x.id).join(","));
   const j=await r.json(),m=near.map(n=>j.find(x=>x.icaoId===n.id)).find(Boolean);
@@ -196,15 +226,17 @@ async function loadWx(){
    wx={src:"Open-Meteo model data (METAR unavailable)",id:near[0].id,name:near[0].n,temp:Math.round(c.temperature_2m),dew:null,wind:Math.round(c.wind_direction_10m)+"° @ "+Math.round(c.wind_speed_10m)+" kt",wdir:Math.round(c.wind_direction_10m),wspd:Math.round(c.wind_speed_10m),vis:Math.min(10,Math.round(c.visibility/1609.34)),alt:(c.pressure_msl*0.02953).toFixed(2),clouds:cc+"% cover",raw:"",cond:cvTxt[k],icon:cvIc[k]};
   }catch(e2){wx=null;$("cnd").textContent="Weather unavailable";return}
  }
+ const ap=AP.find(a=>a[0]===wx.id);wx.dist=ap?dist(me.lat,me.lon,ap[2],ap[3]).toFixed(1):"—";$("loc").textContent=wx.id;$("locn").textContent=(ap?ap[1]:wx.id)+" • "+wx.dist+" NM";
  $("tmp").textContent=wx.temp+"°F";$("cnd").textContent=wx.icon+" "+wx.cond;
  $("wnd").textContent="Wind "+wx.wind;$("vis").textContent=`Vis ${wx.vis} SM • Alt ${wx.alt} inHg`;
- $("wx").innerHTML=`<b>${wx.id}</b> ${wx.icon} ${wx.temp}°F • ${wx.wind} • ${wx.vis} SM • ${wx.alt}<br><span class="mu">${esc(wx.clouds||"")}${wx.time?" • "+wx.time:""}</span>`;
+ $("wx").innerHTML=`<b>${wx.id}</b> (${wx.dist} NM) ${wx.icon} ${wx.temp}°F • ${wx.wind} • ${wx.vis} SM • ${wx.alt}<br><span class="mu">${esc(wx.clouds||"")}${wx.time?" • "+wx.time:""}</span>`;
  if(view==="weather")renderView();
 }
 
 // ---------- GPS, clock, status ----------
+async function loadTz(){try{const j=await(await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${me.lat}&longitude=${me.lon}&current=temperature_2m&timezone=auto`)).json();new Intl.DateTimeFormat([],{timeZone:j.timezone});tz=j.timezone;tick()}catch(e){}}
 let gw=null,first=true;
-function setMe(la,lo,gps){me={lat:la,lon:lo,gps};drawHome();map.setView([la,lo],map.getZoom());load();loadWx();$("sG").className=gps?"ok":"mu";$("sG").textContent=gps?"Fix":"Manual"}
+function setMe(la,lo,gps){me={lat:la,lon:lo,gps};drawHome();map.setView([la,lo],map.getZoom());load();loadWx();loadTz();$("sG").className=gps?"ok":"mu";$("sG").textContent=gps?"Fix":"Manual"}
 if(navigator.geolocation&&cfg.lat==null){
  gw=navigator.geolocation.watchPosition(p=>{
   const moved=dist(me.lat,me.lon,p.coords.latitude,p.coords.longitude)>0.5;
@@ -212,9 +244,8 @@ if(navigator.geolocation&&cfg.lat==null){
   if(first||moved){first=false;setMe(p.coords.latitude,p.coords.longitude,true);$("sG").textContent=`Fix ±${Math.round(p.coords.accuracy)} m`}
  },e=>{$("sG").className="bad";$("sG").textContent="No fix — using KLCI"},{enableHighAccuracy:true,maximumAge:5000,timeout:20000});
 }else $("sG").textContent=cfg.lat!=null?"Manual":"Unsupported";
-const tick=()=>{const d=new Date();$("clk").textContent=d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});$("dt").textContent=d.toLocaleDateString([],{weekday:"short",month:"short",day:"numeric",year:"numeric"});
+const tick=()=>{const d=new Date();$("clk").textContent=d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit",timeZoneName:"short",timeZone:tz});$("dt").textContent=d.toLocaleDateString([],{weekday:"short",month:"short",day:"numeric",year:"numeric",timeZone:tz});
  $("sI").className=navigator.onLine?"ok":"bad";$("sI").textContent=navigator.onLine?"Connected":"Offline"};
-tick();setInterval(tick,600000);
-renderSel();renderView();load();loadWx();sched();setInterval(loadWx,60
-600000);
+tick();setInterval(tick,1000);
+renderSel();renderView();load();loadWx();loadTz();sched();setInterval(loadWx,600000);
 </script></body></html>
