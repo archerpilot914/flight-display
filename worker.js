@@ -45,7 +45,8 @@ export default {
       const candidates=[
         {name:"adsb.lol",root:"https://api.adsb.lol/v2/",registration:"reg"},
         {name:"adsb.fi",root:"https://opendata.adsb.fi/api/v2/",registration:"registration"},
-        {name:"adsb.one",root:"https://api.adsb.one/v2/",registration:"reg"}
+        {name:"adsb.one",root:"https://api.adsb.one/v2/",registration:"reg"},
+        {name:"airplanes.live",root:"https://api.airplanes.live/v2/",registration:"reg"}
       ];
       for(const mode of modes){
         for(const provider of candidates){
@@ -66,7 +67,7 @@ export default {
         }
       }
       if(sawValidEmpty)return Response.json({ac:[],source:"internet",search_mode:"identity"},{headers:{"Cache-Control":"public,max-age=10"}});
-      return Response.json({error:"Aircraft identity search providers unavailable",attempts},{status:502,headers:{"Cache-Control":"no-store"}});
+      return Response.json({error:"Live aircraft search unavailable from this server; providers may restrict Cloudflare requests",attempts},{status:503,headers:{"Cache-Control":"no-store"}});
     }
     if (u.pathname !== "/api/aircraft" && u.pathname !== "/") return env.ASSETS.fetch(request);
     if (u.pathname === "/" && !u.searchParams.has("lat")) return env.ASSETS.fetch(request);
