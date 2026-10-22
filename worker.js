@@ -43,16 +43,24 @@ export default {
     // Snap to a ~3 NM grid so several displays share one cached upstream request.
     const la = (Math.round(lat * 20) / 20).toFixed(2);
     const lo = (Math.round(lon * 20) / 20).toFixed(2);
-    for (const src of SOURCES) {
+    const attempts = [];
+    for (let i = 0; i < SOURCES.length; i++) {
+      const provider = ["adsb.lol", "adsb.fi", "adsb.one"][i];
       try {
-        const up = await fetch(src(la, lo, r), {
-          headers: { "User-Agent": "flight-display/1.0 (personal project)" },
-          cf: { cacheTtl: 5, cacheEverything: true },
+        const up = await fetch(SOURCES[i](la, lo, r), {
+          headers: { "Accept": "application/json" },
+          signal: AbortSignal.timeout(8000),
         });
-        if (!up.ok) continue;
-        return new Response(await up.text(), { headers: { ...CORS, "Cache-Control": "public, max-age=5" } });
-      } catch (e) { /* try next source */ }
+        if (!up.ok) { attempts.push({provider,status:up.status}); continue; }
+        const payload = await up.json();
+        if (!Array.isArray(payload.ac) && !Array.isArray(payload.aircraft)) {
+          attempts.push({provider,status:"invalid aircraft format"}); continue;
+        }
+        return Response.json(payload, { headers: { "Cache-Control": "public, max-age=10" } });
+      } catch (e) {
+        attempts.push({provider,status:String(e).slice(0,100)});
+      }
     }
-    return new Response(JSON.stringify({ error: "all sources failed" }), { status: 502, headers: CORS });
+    return Response.json({error:"All internet aircraft sources unavailable",attempts}, {status:502,headers:{"Cache-Control":"no-store"}});
   },
 };
