@@ -15,11 +15,11 @@ const CORS = {
 };
 
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     if (request.method === "OPTIONS") return new Response(null, { headers: CORS });
     const u = new URL(request.url);
     // /metar?ids=KLCI,KCON  -> aviationweather.gov METARs (includes flight category)
-    if (u.pathname === "/metar") {
+    if (u.pathname === "/api/metar" || u.pathname === "/metar") {
       const ids = (u.searchParams.get("ids") || "").replace(/[^A-Za-z0-9,]/g, "").slice(0, 200);
       if (!ids) return new Response(JSON.stringify({ error: "ids required" }), { status: 400, headers: CORS });
       try {
@@ -32,6 +32,8 @@ export default {
         return new Response(JSON.stringify({ error: "metar fetch failed" }), { status: 502, headers: CORS });
       }
     }
+    if (u.pathname !== "/api/aircraft" && u.pathname !== "/") return env.ASSETS.fetch(request);
+    if (u.pathname === "/" && !u.searchParams.has("lat")) return env.ASSETS.fetch(request);
     const q = u.searchParams;
     const lat = parseFloat(q.get("lat")), lon = parseFloat(q.get("lon"));
     const r = Math.min(250, Math.max(1, parseInt(q.get("r") || "50", 10) || 50));
