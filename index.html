@@ -35,6 +35,9 @@ input,select{width:100%;padding:9px;background:var(--bg);color:var(--tx);border:
 .lb{position:absolute;left:16px;top:-16px;white-space:nowrap;font-size:12px;line-height:1.2;text-shadow:0 0 3px #000,0 0 3px #000;font-weight:600;background:#0008;padding:1px 4px;border-radius:4px}
 .pl.s svg{filter:drop-shadow(0 0 6px #fff)}
 .ap{background:#0a1628d0;padding:1px 5px 1px 2px;border-radius:9px;display:flex;align-items:center;gap:3px;font-size:12px;font-weight:600;text-shadow:0 0 3px #000;white-space:nowrap}.ap u{width:16px;height:16px;border-radius:50%;background:#1d4ed8;border:2px solid #fff;display:inline-block}
+.airport-flight-rule-dot{filter:drop-shadow(0 0 5px #000) drop-shadow(0 0 3px #fff8)}
+.airport-label{position:absolute;left:13px;top:-10px;display:flex;gap:4px;align-items:center;white-space:nowrap;background:#061729eb;color:#fff;border:1px solid #4d6a82;border-radius:5px;padding:3px 5px;font-size:12px;font-weight:800;text-shadow:0 1px 2px #000;box-shadow:0 2px 6px #0008;pointer-events:none}
+.airport-label small{font-size:10px;font-weight:800}
 .rl{background:#0a1628d0;padding:1px 6px;border-radius:4px;color:#fff;font-size:12px;font-weight:600;text-shadow:0 0 3px #000;white-space:nowrap}
 .me{width:16px;height:16px;border-radius:50%;background:#38bdf8;border:3px solid #fff;margin:-8px 0 0 -8px;box-shadow:0 0 8px #38bdf8}
 #sel .photo{float:right;width:44%;max-height:96px;object-fit:cover;border-radius:6px;margin:0 0 6px 8px}
@@ -68,7 +71,7 @@ const SOURCES=[ // Try the same-origin Worker relay, then direct sources
  {n:"OpenSky",min:30000,u:(a,b,r)=>{a=+a;b=+b;const d=r/60,e=d/Math.cos(a*Math.PI/180);return `https://opensky-network.org/api/states/all?lamin=${a-d}&lomin=${b-e}&lamax=${a+d}&lomax=${b+e}`},
   p:j=>(j.states||[]).filter(t=>t[5]!=null&&t[6]!=null).map(t=>({hex:t[0],flight:(t[1]||"").trim(),lat:t[6],lon:t[5],alt_baro:t[8]?"ground":(t[7]!=null?Math.round(t[7]*3.28084):undefined),gs:t[9]!=null?t[9]*1.94384:undefined,track:t[10],baro_rate:t[11]!=null?Math.round(t[11]*196.85):undefined,squawk:t[14],category:t[17]===8?"A7":""}))}];
 const AP=[["KLCI","Laconia",43.5727,-71.4189],["KCON","Concord",43.2027,-71.5023],["KMHT","Manchester",42.9326,-71.4357],["KASH","Nashua",42.7817,-71.5148],["KPSM","Portsmouth",43.0779,-70.8233],["KSFM","Sanford",43.3939,-70.7088],["KDAW","Rochester",43.2841,-71.0292],["KPWM","Portland",43.6462,-70.3093],["KBOS","Boston Logan",42.3643,-71.0052],["KBED","Hanscom",42.47,-71.289],["KORH","Worcester",42.2673,-71.8757],["KEEN","Keene",42.8984,-72.2708],["KLEB","Lebanon",43.6261,-72.3042]];
-let cfg={relay:"",poll:15,lat:null,lon:null,radar:true,rings:true,aps:true,nr:25};
+let cfg={relay:"",poll:10,lat:null,lon:null,radar:true,rings:true,aps:true,nr:25};
 try{Object.assign(cfg,JSON.parse(localStorage.getItem("fdcfg")||"{}"))}catch(e){}
 const save=()=>{try{localStorage.setItem("fdcfg",JSON.stringify(cfg))}catch(e){}};
 let photos={};try{photos=JSON.parse(localStorage.getItem("fdphotos")||"{}")}catch(e){}
@@ -111,7 +114,24 @@ function drawHome(){
   L.marker([me.lat+r*NM/111320,me.lon],{interactive:false,icon:L.divIcon({className:"",html:`<div class="rl" style="transform:translate(-50%,-110%)">${r} NM</div>`})}).addTo(ringL)});
  L.marker([me.lat,me.lon],{interactive:false,icon:L.divIcon({className:"",html:'<div class="me"></div>'})}).addTo(meL);
 }
-function drawAps(){apL.clearLayers();AP.forEach(([id,n,la,lo])=>L.marker([la,lo],{icon:L.divIcon({className:"",html:`<div class="ap" style="transform:translate(-8px,-8px)"><u style="background:${CC[cats[id]]||CC.NA}"></u>${id}${cats[id]?` <small style="color:${CC[cats[id]]}">${cats[id]}</small>`:""}</div>`})}).on("click",()=>{map.setView([la,lo],11)}).addTo(apL))}
+function drawAps(){
+ apL.clearLayers();
+ AP.forEach(([id,n,la,lo])=>{
+  const cat=cats[id]||"NA",colour=CC[cat]||CC.NA;
+  // Real Leaflet circle, anchored precisely on the airport coordinates.
+  L.circleMarker([la,lo],{
+   radius:9,color:"#ffffff",weight:2.5,opacity:1,
+   fillColor:colour,fillOpacity:1,
+   className:"airport-flight-rule-dot"
+  }).bindTooltip(id+" · "+(cat==="NA"?"Weather unavailable":cat),{direction:"top"}).on("click",()=>map.setView([la,lo],11)).addTo(apL);
+  // Separate label so the colored dot remains obvious against any map style.
+  L.marker([la,lo],{
+   interactive:false,
+   icon:L.divIcon({className:"airport-label-marker",iconSize:[0,0],
+    html:`<div class="airport-label"><b>${id}</b> <small style="color:${colour}">${cat==="NA"?"":cat}</small></div>`})
+  }).addTo(apL);
+ });
+}
 function layers(){const s=(l,on)=>on?l.addTo(map):map.removeLayer(l);s(ringL,cfg.rings);s(apL,cfg.aps);s(radar,cfg.radar)}
 drawHome();drawAps();layers();
 
@@ -123,32 +143,57 @@ async function loadInner(){const errs=[];
   const s=list[(src+i)%list.length];
   if(s.min&&Date.now()-(s.last||0)<s.min){errs.push(s.n+" throttled");continue}
   try{
-   s.last=Date.now();const r=await fetch(s.u(me.lat.toFixed(3),me.lon.toFixed(3),50));
-   if(!r.ok)throw new Error(r.status);
+   s.last=Date.now();const r=await fetch(s.u(me.lat.toFixed(3),me.lon.toFixed(3),50),{signal:AbortSignal.timeout(12000)});
+   if(!r.ok){let detail="";try{const e=await r.json();detail=(e.error||"")+(e.attempts?" ("+e.attempts.map(x=>x.provider+":"+x.status).join(", ")+")":"")}catch(_){}throw new Error("HTTP "+r.status+(detail?" — "+detail:""))}
    const j=await r.json();
-   data=(s.p?s.p(j):(j.ac||j.aircraft||[])).filter(a=>a.lat!=null&&a.lon!=null);
+   const incoming=s.p?s.p(j):(j.ac||j.aircraft);
+   if(!Array.isArray(incoming))throw Error("Unexpected aircraft data format");
+   data=incoming.filter(a=>a.lat!=null&&a.lon!=null);
    src=(src+i)%list.length;
    data.forEach(a=>{const t=trails[a.hex]=trails[a.hex]||[],l=t[t.length-1];if(!l||l[0]!=a.lat||l[1]!=a.lon){t.push([a.lat,a.lon]);if(t.length>80)t.shift()}});
    $("sA").className="ok";$("sA").textContent=`Receiving (${s.n})`;
    return draw();
   }catch(e){console.warn(s.n,e);errs.push(s.n+": "+(e.message||e))}
  }
- $("sA").className="bad";$("sA").textContent="No data — "+errs.join(" • ").slice(0,110);
+ $("sA").className="bad";$("sA").textContent="No data — "+errs.join(" • ").slice(0,210);
+ console.warn("Aircraft sources unavailable",errs);
 }
 let busy=false;const load=async()=>{if(busy)return;busy=true;try{await loadInner()}finally{busy=false}};
 let timer;const sched=()=>{clearInterval(timer);timer=setInterval(load,Math.max(10,cfg.poll)*1000)};
+// Animate between consecutive actual reports; never predict beyond received positions.
+const motion=new Map();
+const smoothstep=t=>t*t*(3-2*t);
+function animateAircraft(now){
+ for(const [hex,m] of motion){
+  const marker=mk[hex];if(!marker){motion.delete(hex);continue}
+  const t=Math.min(1,(now-m.start)/m.duration),f=smoothstep(Math.max(0,t));
+  const lat=m.from[0]+(m.to[0]-m.from[0])*f;
+  let dl=m.to[1]-m.from[1];if(dl>180)dl-=360;if(dl< -180)dl+=360;
+  const lon=m.from[1]+dl*f;
+  marker.setLatLng([lat,lon]);
+  if(follow&&sel===hex&&t<1)map.panTo([lat,lon],{animate:false});
+  if(t>=1)motion.delete(hex);
+ }
+ requestAnimationFrame(animateAircraft);
+}
+requestAnimationFrame(animateAircraft);
 function draw(){
  const seen=new Set();
  data.filter(vis).forEach(a=>{
   seen.add(a.hex);const c=COL[kind(a)],s=a.hex===sel?" s":"";
   const icon=L.divIcon({className:"",iconSize:[0,0],html:`<div class="pl${s}"><svg viewBox="0 0 24 24" fill="${c}" stroke="#000" stroke-width=".6" style="transform:rotate(${a.track||0}deg)">${PLANE}</svg><div class="lb" style="color:${c}">${esc(nm(a))}<br>${alt(a)}${a.alt_baro==="ground"?"":" ft"}<br>${a.gs!=null?Math.round(a.gs)+" kt":""}</div></div>`});
-  if(mk[a.hex])mk[a.hex].setLatLng([a.lat,a.lon]).setIcon(icon);else mk[a.hex]=L.marker([a.lat,a.lon],{icon}).addTo(acL).on("click",()=>pick(a.hex));
+  if(mk[a.hex]){
+   const pos=mk[a.hex].getLatLng(),changed=Math.abs(pos.lat-a.lat)>0.000001||Math.abs(pos.lng-a.lon)>0.000001;
+   mk[a.hex].setIcon(icon);
+   if(changed)motion.set(a.hex,{from:[pos.lat,pos.lng],to:[a.lat,a.lon],start:performance.now(),duration:Math.max(1000,Math.min(10000,Math.max(10,cfg.poll)*1000-350))});
+   else motion.delete(a.hex);
+  }else mk[a.hex]=L.marker([a.lat,a.lon],{icon}).addTo(acL).on("click",()=>pick(a.hex));
  });
- Object.keys(mk).forEach(h=>{if(!seen.has(h)){acL.removeLayer(mk[h]);delete mk[h]}});
+ Object.keys(mk).forEach(h=>{if(!seen.has(h)){acL.removeLayer(mk[h]);motion.delete(h);delete mk[h]}});
  trL.clearLayers();
  const a=data.find(x=>x.hex===sel);
  if(a&&trailOn&&trails[sel])L.polyline(trails[sel],{color:"#38bdf8",weight:3}).addTo(trL);
- if(a&&follow)map.panTo([a.lat,a.lon]);
+ if(a&&follow&&!motion.has(a.hex))map.panTo([a.lat,a.lon],{animate:false});
  renderSel();if(view==="traffic"||view==="search")renderView();
 }
 function pick(h){sel=h;const a=data.find(x=>x.hex===h);if(a)map.panTo([a.lat,a.lon]);draw()}
@@ -217,9 +262,26 @@ $("sb").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)re
 const cvTxt={CLR:"Clear",SKC:"Clear",FEW:"Mostly Clear",SCT:"Partly Cloudy",BKN:"Mostly Cloudy",OVC:"Overcast"},cvIc={CLR:"☀️",SKC:"☀️",FEW:"🌤",SCT:"⛅",BKN:"🌥",OVC:"☁️"};
 const F=c=>Math.round(c*9/5+32);
 const metarUrl=ids=>"/api/metar?format=json&ids="+ids;
-function catOf(m){if(m.fltCat)return m.fltCat;const v=parseFloat(String(m.visib).replace("+","")),cl=(m.clouds||[]).filter(c=>(c.cover==="BKN"||c.cover==="OVC")&&c.base!=null).map(c=>c.base),c=cl.length?Math.min(...cl):99999;
- if(v<1||c<500)return"LIFR";if(v<3||c<1000)return"IFR";if(v<=5||c<=3000)return"MVFR";return"VFR"}
-async function loadCats(){try{const j=await(await fetch(metarUrl(AP.map(a=>a[0]).join(",")))).json();const c={};j.forEach(m=>{c[m.icaoId]=catOf(m)});cats=c;drawAps();if(view==="airports")renderView()}catch(e){console.warn("flight categories unavailable",e)}}
+function catOf(m){
+ const reported=String(m.fltCat||"").toUpperCase();if(CC[reported]&&reported!=="NA")return reported;
+ const v=parseFloat(String(m.visib??"").replace("+",""));
+ const ceilings=(m.clouds||[]).filter(c=>["BKN","OVC","VV"].includes(c.cover)&&Number.isFinite(Number(c.base))).map(c=>Number(c.base));
+ const c=ceilings.length?Math.min(...ceilings):Infinity;
+ if(!Number.isFinite(v)&&!Number.isFinite(c))return"NA";
+ if((Number.isFinite(v)&&v<1)||c<500)return"LIFR";
+ if((Number.isFinite(v)&&v<3)||c<1000)return"IFR";
+ if((Number.isFinite(v)&&v<=5)||c<=3000)return"MVFR";
+ return"VFR";
+}
+async function loadCats(){
+ try{
+  const response=await fetch(metarUrl(AP.map(a=>a[0]).join(",")),{cache:"no-store"});
+  if(!response.ok)throw Error("Weather service HTTP "+response.status);
+  const j=await response.json();if(!Array.isArray(j))throw Error("Weather response wasn't a METAR list");
+  const c={};for(const m of j){if(m&&m.icaoId)c[m.icaoId.toUpperCase()]=catOf(m)}
+  cats=c;drawAps();if(view==="airports")renderView();
+ }catch(e){console.warn("Airport flight-rule colors unavailable",e);cats={};drawAps();if(view==="airports")renderView()}
+}
 async function loadWx(){
  const near=AP.map(a=>({id:a[0],n:a[1],d:dist(me.lat,me.lon,a[2],a[3])})).sort((a,b)=>a.d-b.d);
  $("loc").textContent=near[0].id;$("locn").textContent=near[0].n+" • "+near[0].d.toFixed(1)+" NM";
