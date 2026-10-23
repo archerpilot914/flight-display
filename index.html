@@ -186,10 +186,15 @@ async function lookupAirports(a){
  if(sel&&data.some(x=>x.hex===sel&&routeKey(x)===cs))renderSel();
 }
 function airportSummary(a){
- const c=airportCache.get(routeKey(a)),code=p=>p&&(p.iata||p.icao||"");
- if(!c||c.status==="loading")return '<div class="mu">Looking up origin and destination…</div>';
- if(c.status!=="ok")return '<div class="mu">Origin / destination not published for this flight</div>';
- const j=c.info;return '<div style="font-size:16px;font-weight:650;margin:7px 0">'+esc(code(j.origin))+' → '+esc(code(j.destination))+' <span class="mu">('+esc(j.source||"route database")+')</span></div>';
+ const cs=routeKey(a),p=routeCache.get(cs),c=airportCache.get(cs);
+ const valid=i=>i&&i.origin&&i.destination&&(i.origin.iata||i.origin.icao)&&(i.destination.iata||i.destination.icao);
+ const fromPlan=p&&p.info&&valid(p.info)?p.info:null;
+ const fromFree=c&&c.status==="ok"&&valid(c.info)?c.info:null;
+ const info=fromPlan||fromFree;
+ const code=ap=>ap&&(ap.iata||ap.icao||"");
+ if(info)return '<div style="font-size:17px;font-weight:700;margin:9px 0">From '+esc(code(info.origin))+' → To '+esc(code(info.destination))+'</div>';
+ if((p&&p.status==="loading")||(c&&c.status==="loading"))return '<div class="mu">Finding departure and destination…</div>';
+ return '<div class="mu">Departure / destination unavailable from free flight data</div>';
 }
 function routeDetails(a){
  const cs=routeKey(a),r=routeCache.get(cs),m='<div class="mu" style="margin-top:8px">';
@@ -200,7 +205,7 @@ function routeDetails(a){
  if(r.status!=="ok")return m+'No route data found for this flight.</div>';
  const i=r.info,code=p=>p&&(p.iata||p.icao||"");
  const kindTxt=filedKind(i)?"Filed route ("+esc((i.sources&&i.sources.filed)||"FlightAware")+")":"Airport-to-airport only (no filed route; add a FlightAware key)";
- return '<div style="margin-top:8px"><b>'+esc(code(i.origin)||"?")+' → '+esc(code(i.destination)||"?")+'</b>'+(i.airline?' <span class="mu">'+esc(i.airline)+'</span>':'')+
+ return '<div style="margin-top:8px">'+(i.airline?' <span class="mu">'+esc(i.airline)+'</span>':'')+
   '<div class="mu">'+kindTxt+(i.route?': '+esc(String(i.route).slice(0,150)):'')+'</div>'+
   '<div class="mu">Pink dashed = '+(filedKind(i)?'filed route':'great-circle estimate')+' • Blue = flown path'+(i.sources&&i.sources.actual?' ('+esc(i.sources.actual)+')':' (recorded since you opened this page)')+'</div></div>';
 }
@@ -330,7 +335,7 @@ function draw(){
  if(a&&follow&&!motion.has(a.hex))map.panTo([a.lat,a.lon],{animate:false});
  renderSel();if(view==="traffic"||view==="search")renderView();
 }
-function pick(h){sel=h;const a=data.find(x=>x.hex===h);if(a){map.panTo([a.lat,a.lon]);lookupAirports(a)}draw()}
+function pick(h){sel=h;const a=data.find(x=>x.hex===h);if(a){map.panTo([a.lat,a.lon]);lookupAirports(a);lookupRoute(a,false)}draw()}
 const card=a=>{const d=dme(a),b=(Math.atan2(Math.sin(rad(a.lon-me.lon))*Math.cos(rad(a.lat)),Math.cos(rad(me.lat))*Math.sin(rad(a.lat))-Math.sin(rad(me.lat))*Math.cos(rad(a.lat))*Math.cos(rad(a.lon-me.lon)))*180/Math.PI+360)%360;return[d,b]};
 // Manually saved type photos take precedence; otherwise try a photo of this particular airframe.
 const psCache=new Map();
