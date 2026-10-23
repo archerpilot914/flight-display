@@ -130,7 +130,7 @@ export default {
             return json({ photo: { src, link: ph.link, by: ph.photographer || "Unknown" } }, 200, 3600);
         } catch (err) { /* try registration or return unavailable */ }
       }
-      return json({ photo: null }, 200, 3600);
+      return json({ photo: null, reason: "not_found_or_provider_unavailable" }, 200, 300);
     }
 
     if (/\/search$/.test(p)) return json(await search(q.get("query") || ""), 200, 5);
