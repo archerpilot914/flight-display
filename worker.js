@@ -111,6 +111,28 @@ export default {
     const u = new URL(request.url), q = u.searchParams, p = u.pathname;
     if (!p.startsWith("/api/")) return env.ASSETS.fetch(request);
 
+    if (p === "/api/photo") {
+      const hex = (q.get("hex") || "").trim().toLowerCase();
+      const reg = (q.get("reg") || "").trim().toUpperCase();
+      if (!/^[0-9a-f]{6}$/.test(hex)) return json({ error: "invalid hex" }, 400);
+      const validUrl = (value) => {
+        try { const u = new URL(value); return u.protocol === "https:" &&
+          (u.hostname === "planespotters.net" || u.hostname.endsWith(".planespotters.net")); }
+        catch { return false; }
+      };
+      for (const path of ["hex/" + hex, ...(/^[A-Z0-9-]{3,12}$/.test(reg) ? ["reg/" + encodeURIComponent(reg)] : [])]) {
+        try {
+          const upstream = await get("https://api.planespotters.net/pub/photos/" + path, 3600);
+          if (!upstream.ok) continue;
+          const ph = ((await upstream.json()).photos || [])[0];
+          const src = ph && ((ph.thumbnail_large && ph.thumbnail_large.src) || (ph.thumbnail && ph.thumbnail.src));
+          if (src && validUrl(src) && validUrl(ph.link))
+            return json({ photo: { src, link: ph.link, by: ph.photographer || "Unknown" } }, 200, 3600);
+        } catch (err) { /* try registration or return unavailable */ }
+      }
+      return json({ photo: null }, 200, 3600);
+    }
+
     if (/\/search$/.test(p)) return json(await search(q.get("query") || ""), 200, 5);
 
     if (/\/plan$/.test(p)) {
