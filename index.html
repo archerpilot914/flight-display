@@ -171,6 +171,26 @@ async function lookupRoute(a,force){
  return entry.promise;
 }
 function filedKind(i){return i&&i.filed&&i.filed.length>1}
+// Free origin/destination lookup independent of optional paid filed-route lookups.
+const airportCache=new Map();
+async function lookupAirports(a){
+ const cs=routeKey(a);if(!/^[A-Z0-9]{3,10}$/.test(cs))return;
+ const prior=airportCache.get(cs);
+ if(prior&&Date.now()-prior.time<3600000)return;
+ const entry={status:"loading",time:Date.now()};airportCache.set(cs,entry);
+ try{
+  const res=await fetch("/api/airports?callsign="+encodeURIComponent(cs),{signal:AbortSignal.timeout(9000)});
+  if(!res.ok)throw Error("Airport lookup HTTP "+res.status);
+  const j=await res.json();entry.status=j.origin&&j.destination?"ok":"none";entry.info=j;
+ }catch(err){entry.status="error"}
+ if(sel&&data.some(x=>x.hex===sel&&routeKey(x)===cs))renderSel();
+}
+function airportSummary(a){
+ const c=airportCache.get(routeKey(a)),code=p=>p&&(p.iata||p.icao||"");
+ if(!c||c.status==="loading")return '<div class="mu">Looking up origin and destination…</div>';
+ if(c.status!=="ok")return '<div class="mu">Origin / destination not published for this flight</div>';
+ const j=c.info;return '<div style="font-size:16px;font-weight:650;margin:7px 0">'+esc(code(j.origin))+' → '+esc(code(j.destination))+' <span class="mu">('+esc(j.source||"route database")+')</span></div>';
+}
 function routeDetails(a){
  const cs=routeKey(a),r=routeCache.get(cs),m='<div class="mu" style="margin-top:8px">';
  if(!cs)return m+'No callsign or registration to look up a route.</div>';
@@ -310,11 +330,11 @@ function draw(){
  if(a&&follow&&!motion.has(a.hex))map.panTo([a.lat,a.lon],{animate:false});
  renderSel();if(view==="traffic"||view==="search")renderView();
 }
-function pick(h){sel=h;const a=data.find(x=>x.hex===h);if(a)map.panTo([a.lat,a.lon]);draw()}
+function pick(h){sel=h;const a=data.find(x=>x.hex===h);if(a){map.panTo([a.lat,a.lon]);lookupAirports(a)}draw()}
 const card=a=>{const d=dme(a),b=(Math.atan2(Math.sin(rad(a.lon-me.lon))*Math.cos(rad(a.lat)),Math.cos(rad(me.lat))*Math.sin(rad(a.lat))-Math.sin(rad(me.lat))*Math.cos(rad(a.lat))*Math.cos(rad(a.lon-me.lon)))*180/Math.PI+360)%360;return[d,b]};
 // Manually saved type photos take precedence; otherwise try a photo of this particular airframe.
 const psCache=new Map();
-const psOk=(u)=>{try{const x=new URL(u);return x.protocol==="https:"&&(x.hostname==="planespotters.net"||x.hostname.endsWith(".planespotters.net"))}catch(e){return false}};
+const psOk=(u)=>{try{const x=new URL(u);return x.protocol==="https:"&&["planespotters.net","plnspttrs.net"].some(d=>x.hostname===d||x.hostname.endsWith("."+d))}catch(e){return false}};
 async function loadPhoto(a){
  const hex=String(a.hex||"").toLowerCase();if(!/^[0-9a-f]{6}$/.test(hex))return;
  const e={status:"loading",time:Date.now()};psCache.set(hex,e);
@@ -325,6 +345,7 @@ async function loadPhoto(a){
   const j=await res.json();
   if(j.photo&&psOk(j.photo.src)&&psOk(j.photo.link))e.photo=j.photo;
   else if(j.error)throw Error(j.error);
+  e.reason=j.reason||"";
   e.status=e.photo?"ok":"none";
  }catch(err){e.status="error";console.warn("Aircraft photo unavailable",err)}
  if(sel&&String(sel).toLowerCase()===hex)renderSel();
@@ -335,7 +356,7 @@ function photoHtml(a){
  const hex=String(a.hex||"").toLowerCase(),e=psCache.get(hex);
  if(!e||(["none","error"].includes(e.status)&&Date.now()-e.time>3600000)){loadPhoto(a);return '<div class="mu photo-status">Searching for aircraft photo…</div>'}
  if(e.status==="loading")return '<div class="mu photo-status">Searching for aircraft photo…</div>';
- if(e.status!=="ok")return '<div class="mu photo-status">'+(e.status==="error"?'Photo lookup unavailable':'No photo of this aircraft found')+' <button class="photo-retry" type="button" onclick="retryAircraftPhoto()">Retry</button></div>';
+ if(e.status!=="ok")return '<div class="mu photo-status">'+(e.status==="error"?'Photo lookup unavailable':e.reason==="provider_unavailable"?'Photo provider unavailable':'No photo of this aircraft found')+' <button class="photo-retry" type="button" onclick="retryAircraftPhoto()">Retry</button></div>';
  const ph=e.photo;
  return `<div class="phw"><a href="${esc(ph.link)}" target="_blank" rel="noopener"><img src="${esc(ph.src)}" alt="Photograph of selected aircraft" onerror="this.style.display='none'"></a><div class="credit">Photo: ${esc(ph.by)} • <a href="${esc(ph.link)}" target="_blank" rel="noopener">Planespotters.net</a></div></div>`;
 }
@@ -344,7 +365,7 @@ function renderSel(){
  const a=data.find(x=>x.hex===sel),el=$("sel");
  if(!a){el.innerHTML=`<h2>Select aircraft</h2><div class="mu">Tap a plane on the map or in the list${sel?" — selected aircraft is out of range":""}</div>`;return}
  const [d,b]=card(a),vr=a.baro_rate;
- el.innerHTML=`${photoHtml(a)}<h2><span style="color:${COL[kind(a)]}">★</span> ${esc(nm(a))}</h2><div class="mu">${esc(a.desc||a.t||"Unknown type")} ${a.r?"• "+esc(a.r):""}</div>${routeDetails(a)}
+ el.innerHTML=`${photoHtml(a)}<h2><span style="color:${COL[kind(a)]}">★</span> ${esc(nm(a))}</h2><div class="mu">${esc(a.desc||a.t||"Unknown type")} ${a.r?"• "+esc(a.r):""}</div>${airportSummary(a)}${routeDetails(a)}
  <div class="g"><div><span>Altitude</span><b>${alt(a)} ft</b></div><div><span>Squawk</span><b>${esc(a.squawk||"—")}</b></div>
  <div><span>Ground speed</span><b>${a.gs!=null?Math.round(a.gs)+" kt":"—"}</b></div><div><span>Type</span><b>${esc(a.t||"—")}</b></div>
  <div><span>Heading</span><b>${a.track!=null?Math.round(a.track)+"°":"—"}</b></div><div><span>Registration</span><b>${esc(a.r||"—")}</b></div>
@@ -391,6 +412,7 @@ async function lookupFlight(){
   data=data.filter(a=>a.hex!==match.hex).concat(match);
   // Show the whole trip (not just a follow-zoom): turn the route on, load the plan, then fit the map to it.
   sel=match.hex;follow=false;trailOn=true;
+   lookupAirports(match);
   searchError="Found "+nm(match)+" via "+source+(resolved!==query?" ("+query+" → "+resolved+")":"")+" — loading filed route and flown path…";
   const t=trails[match.hex]||(trails[match.hex]=[]);t.push([match.lat,match.lon]);
   map.flyTo([match.lat,match.lon],Math.max(map.getZoom(),8));
