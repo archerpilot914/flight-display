@@ -160,12 +160,12 @@ async function lookupRoute(a,force){
  routeCache.set(cs,entry);
  entry.promise=(async()=>{
   try{
-   const res=await fetch("/api/plan?ident="+encodeURIComponent(cs)+"&hex="+encodeURIComponent(a.hex||""),{signal:AbortSignal.timeout(25000)});
+   const res=await fetch("/api/plan?ident="+encodeURIComponent(cs)+"&hex="+encodeURIComponent(a.hex||"")+"&lat="+a.lat+"&lon="+a.lon+(a.track!=null?"&trk="+a.track:""),{signal:AbortSignal.timeout(25000)});
    if(!res.ok)throw Error("Plan service HTTP "+res.status);
    const j=await res.json();
    const hasA=p=>p&&Number.isFinite(Number(p.latitude))&&Number.isFinite(Number(p.longitude));
    entry.info=j;
-   entry.status=((j.filed&&j.filed.length>1)||(hasA(j.origin)&&hasA(j.destination))||(j.actual&&j.actual.length>1))?"ok":"none";
+   entry.status=((j.filed&&j.filed.length>1)||(hasA(j.origin)||hasA(j.destination))||(j.actual&&j.actual.length>1))?"ok":"none";
   }catch(e){entry.status="error";entry.error=String(e)}
   if(sel&&data.some(x=>x.hex===sel&&routeKey(x)===cs)){draw();renderSel()}
   return entry;
@@ -190,11 +190,11 @@ async function lookupAirports(a){
 function airportSummary(a){
  const cs=routeKey(a),p=routeCache.get(cs),c=airportCache.get(cs);
  const valid=i=>i&&i.origin&&i.destination&&(i.origin.iata||i.origin.icao)&&(i.destination.iata||i.destination.icao);
- const fromPlan=p&&p.info&&valid(p.info)?p.info:null;
+ const fromPlan=p&&p.info&&(p.info.origin||p.info.destination)?p.info:null;
  const fromFree=c&&c.status==="ok"&&valid(c.info)?c.info:null;
  const info=fromPlan||fromFree;
  const code=ap=>ap&&(ap.iata||ap.icao||"");
- if(info)return '<div style="font-size:17px;font-weight:700;margin:9px 0">From '+esc(code(info.origin))+' → To '+esc(code(info.destination))+'</div>';
+ if(info)return '<div style="font-size:17px;font-weight:700;margin:9px 0">From '+esc(code(info.origin)||"Unknown")+' → To '+esc(code(info.destination)||"Unknown")+'</div>';
  if((p&&p.status==="loading")||(c&&c.status==="loading"))return '<div class="mu">Finding departure and destination…</div>';
  return '<div class="mu">Departure / destination unavailable from free flight data</div>';
 }
@@ -205,11 +205,13 @@ function routeDetails(a){
  if(r.status==="loading")return m+'Loading filed route and flown path…</div>';
  if(r.status==="error")return m+'Route lookup unavailable.</div>';
  if(r.status!=="ok")return m+'No route data found for this flight.</div>';
- const i=r.info,code=p=>p&&(p.iata||p.icao||"");
- const kindTxt=filedKind(i)?"Filed route ("+esc((i.sources&&i.sources.filed)||"FlightAware")+")":"Airport-to-airport only (no filed route; add a FlightAware key)";
- return '<div style="margin-top:8px">'+(i.airline?' <span class="mu">'+esc(i.airline)+'</span>':'')+
-  '<div class="mu">'+kindTxt+(i.route?': '+esc(String(i.route).slice(0,150)):'')+'</div>'+
-  '<div class="mu">Pink dashed = '+(filedKind(i)?'filed route':'great-circle estimate')+' • Blue = flown path'+(i.sources&&i.sources.actual?' ('+esc(i.sources.actual)+')':' (recorded since you opened this page)')+'</div></div>';
+ const i=r.info,S=i.sources||{},code=p=>p&&(p.iata||p.icao||"");
+ const how=filedKind(i)?"Filed route ("+(S.filed||"FlightAware")+")":S.airports==="ADS-B departure"?"Departure detected from ADS-B history. The destination needs filed-plan data (add a FlightAware key).":S.airports?"Schedule database ("+S.airports+"), checked against this aircraft's real departure":"No route data found.";
+ const dep=i.departure&&i.departure.time?" • Departed "+new Date(i.departure.time*1000).toUTCString().slice(17,22)+"Z":"";
+ return '<div style="margin-top:8px"><b>'+esc(code(i.origin)||"?")+' → '+esc(code(i.destination)||"?")+'</b>'+(i.airline?' <span class="mu">'+esc(i.airline)+'</span>':'')+'<span class="mu">'+esc(dep)+'</span>'+
+  '<div class="mu">'+esc(how)+(i.route?': '+esc(String(i.route).slice(0,150)):'')+'</div>'+
+  (i.notes&&i.notes.length?'<div class="mu">'+esc(i.notes.join(" "))+'</div>':'')+
+  '<div class="mu">'+(filedKind(i)?'Pink dashed = filed route • ':(code(i.destination)?'Pink dashed = great-circle estimate • ':''))+'Blue = flown path'+(S.actual?' ('+esc(S.actual)+')':' (recorded since you opened this page)')+'</div></div>';
 }
 function gcLine(o,d){
  const line=[],segments=60,radian=Math.PI/180,p1=o[0]*radian,l1=o[1]*radian,p2=d[0]*radian,l2=d[1]*radian;
