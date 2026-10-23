@@ -306,27 +306,25 @@ const psOk=(u)=>{try{const x=new URL(u);return x.protocol==="https:"&&(x.hostnam
 async function loadPhoto(a){
  const hex=String(a.hex||"").toLowerCase();if(!/^[0-9a-f]{6}$/.test(hex))return;
  const e={status:"loading",time:Date.now()};psCache.set(hex,e);
- const tries=["hex/"+encodeURIComponent(hex)];if(a.r)tries.push("reg/"+encodeURIComponent(a.r));
- for(const t of tries){
-  try{
-   const r=await fetch("https://api.planespotters.net/pub/photos/"+t,{signal:AbortSignal.timeout(8000)});
-   if(!r.ok)continue;
-   const ph=((await r.json()).photos||[])[0];
-   const src=ph&&((ph.thumbnail_large&&ph.thumbnail_large.src)||(ph.thumbnail&&ph.thumbnail.src));
-   if(src&&psOk(src)&&psOk(ph.link)){e.photo={src,link:ph.link,by:ph.photographer||"Unknown"};break}
-  }catch(x){}
- }
- e.status=e.photo?"ok":"none";
- if(sel===hex)renderSel();
+ try{
+  const q=new URLSearchParams({hex});if(a.r)q.set("reg",a.r);
+  const res=await fetch("/api/photo?"+q.toString(),{signal:AbortSignal.timeout(12000)});
+  if(!res.ok)throw Error("Photo service unavailable");
+  const j=await res.json();
+  if(j.photo&&psOk(j.photo.src)&&psOk(j.photo.link))e.photo=j.photo;
+  e.status=e.photo?"ok":"none";
+ }catch(err){e.status="error";console.warn("Aircraft photo unavailable",err)}
+ if(sel&&String(sel).toLowerCase()===hex)renderSel();
 }
 function photoHtml(a){
  const custom=photos[(a.t||"").toUpperCase()];
  if(custom)return `<img class="photo" src="${custom}">`;
  const hex=String(a.hex||"").toLowerCase(),e=psCache.get(hex);
- if(!e||(e.status==="none"&&Date.now()-e.time>3600000)){loadPhoto(a);return""}
- if(e.status!=="ok")return"";
+ if(!e||(["none","error"].includes(e.status)&&Date.now()-e.time>3600000)){loadPhoto(a);return '<div class="mu" style="float:right;font-size:11px">Loading photo…</div>'}
+ if(e.status==="loading")return '<div class="mu" style="float:right;font-size:11px">Loading photo…</div>';
+ if(e.status!=="ok")return '<div class="mu" style="float:right;font-size:11px">No aircraft photo available</div>';
  const ph=e.photo;
- return `<div class="phw"><a href="${esc(ph.link)}" target="_blank" rel="noopener"><img src="${esc(ph.src)}" alt="Photograph of selected aircraft"></a><div class="credit">Photo: ${esc(ph.by)} • <a href="${esc(ph.link)}" target="_blank" rel="noopener">Planespotters.net</a></div></div>`;
+ return `<div class="phw"><a href="${esc(ph.link)}" target="_blank" rel="noopener"><img src="${esc(ph.src)}" alt="Photograph of selected aircraft" onerror="this.style.display='none'"></a><div class="credit">Photo: ${esc(ph.by)} • <a href="${esc(ph.link)}" target="_blank" rel="noopener">Planespotters.net</a></div></div>`;
 }
 function renderSel(){
  const a=data.find(x=>x.hex===sel),el=$("sel");
