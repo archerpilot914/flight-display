@@ -19,7 +19,7 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--tx);font:16px sy
 #mapw{position:relative;overflow:hidden}#map{position:absolute;inset:0;background:#0a1626}
 #sb{position:absolute;left:8px;top:8px;z-index:900;display:flex;flex-direction:column;gap:6px}
 #sb button{width:70px;padding:8px 2px;font-size:12px;background:#0a1628e6;border:1px solid var(--ln);color:var(--tx);border-radius:8px}
-#sb button i{display:block;font-style:normal;font-size:22px}#sb button.on{border-color:var(--ac);background:#12305c}
+#sb button i{display:block;font-style:normal;font-size:22px}#sb #homeBtn{width:86px;background:#164477;border-color:#479bff;font-weight:750}#sb #homeBtn i{font-size:25px}#sb button.on{border-color:var(--ac);background:#12305c}
 #wx{position:absolute;right:8px;top:8px;z-index:900;background:#0a1628e6;border:1px solid var(--ln);border-radius:8px;padding:7px 11px;font-size:13px;max-width:60%}
 #right{display:flex;flex-direction:column;gap:6px;min-height:0}
 #sel{padding:14px 16px;flex:0 0 auto}#sel h2{margin:0;font-size:30px}
@@ -67,7 +67,7 @@ input,select{width:100%;padding:9px;background:var(--bg);color:var(--tx);border:
  <div><b>GPS</b><span id="sG">Searching…</span></div>
 </div>
 <div id="mapw" class="box"><div id="map"></div>
- <div id="sb"><button data-f="all" class="on"><i>☰</i>All</button><button data-f="com"><i style="color:var(--com)">✈</i>Commercial</button><button data-f="ga"><i style="color:var(--ga)">✈</i>GA</button><button data-f="mil"><i style="color:var(--mil)">✈</i>Military</button><button data-f="heli"><i style="color:var(--hel)">✢</i>Helicopter</button></div>
+ <div id="sb"><button id="homeBtn" type="button" title="Return to GPS or saved home location"><i>⌖</i>Home / GPS</button><button data-f="all" class="on"><i>☰</i>All</button><button data-f="com"><i style="color:var(--com)">✈</i>Commercial</button><button data-f="ga"><i style="color:var(--ga)">✈</i>GA</button><button data-f="mil"><i style="color:var(--mil)">✈</i>Military</button><button data-f="heli"><i style="color:var(--hel)">✢</i>Helicopter</button></div>
  <div id="wx">Weather loading…</div><div id="leg" class="box" style="position:absolute;left:8px;bottom:8px;z-index:900;padding:4px 8px;font-size:11px;display:flex;gap:8px"><span class="mu">Airports</span><span style="color:#22c55e">● VFR</span><span style="color:#3b82f6">● MVFR</span><span style="color:#ec4899">● IFR</span><span style="color:#a855f7">● LIFR</span><span style="color:#6b7280">● no data</span></div><div id="mapmsg" class="box" style="display:none;position:absolute;left:84px;bottom:8px;z-index:900;padding:6px 10px;font-size:12px">Map tiles can’t load — check internet or ad-blocker</div></div>
 <aside id="right"><div id="sel" class="box"></div><div id="view" class="box"></div></aside>
 <nav id="nav"><button data-v="traffic" class="on"><i>✈</i>Traffic</button><button data-v="search"><i>⌕</i>Search Flight</button><button data-v="airports"><i>▥</i>Airports</button><button data-v="weather"><i>☁</i>Weather</button><button data-v="layers"><i>▱</i>Layers</button><button data-v="settings"><i>⚙</i>Settings</button></nav>
@@ -93,7 +93,7 @@ const shrink=(f,cb)=>{const r=new FileReader();r.onload=()=>{const i=new Image()
 let tz;
 const CC={VFR:"#22c55e",MVFR:"#3b82f6",IFR:"#ec4899",LIFR:"#a855f7",NA:"#6b7280"};let cats={};
 let me={lat:cfg.lat??43.5727,lon:cfg.lon??-71.4189,gps:false}, data=[], filter="all", view="traffic", sel=null, follow=false, trailOn=false, src=0, wx=null, trails={}, mk={}, q="";
-let remoteAircraft=null,remoteFoundAt=0,searchError="",searchBusy=false,routePts=[];
+let remoteAircraft=null,remoteFoundAt=0,searchError="",searchBusy=false,routePts=[],homeMode=true;
 const routeCache=new Map();
 const rad=x=>x*Math.PI/180;
 const dist=(a,b,c,d)=>{const p=rad(c-a),r=rad(d-b),x=Math.sin(p/2)**2+Math.cos(rad(a))*Math.cos(rad(c))*Math.sin(r/2)**2;return 6371000*2*Math.asin(Math.sqrt(x))/NM};
@@ -335,7 +335,7 @@ function draw(){
  if(a&&follow&&!motion.has(a.hex))map.panTo([a.lat,a.lon],{animate:false});
  renderSel();if(view==="traffic"||view==="search")renderView();
 }
-function pick(h){sel=h;const a=data.find(x=>x.hex===h);if(a){map.panTo([a.lat,a.lon]);lookupAirports(a);lookupRoute(a,false)}draw()}
+function pick(h){homeMode=false;sel=h;const a=data.find(x=>x.hex===h);if(a){map.panTo([a.lat,a.lon]);lookupAirports(a);lookupRoute(a,false)}draw()}
 const card=a=>{const d=dme(a),b=(Math.atan2(Math.sin(rad(a.lon-me.lon))*Math.cos(rad(a.lat)),Math.cos(rad(me.lat))*Math.sin(rad(a.lat))-Math.sin(rad(me.lat))*Math.cos(rad(a.lat))*Math.cos(rad(a.lon-me.lon)))*180/Math.PI+360)%360;return[d,b]};
 // Manually saved type photos take precedence; otherwise try a photo of this particular airframe.
 const psCache=new Map();
@@ -416,7 +416,7 @@ async function lookupFlight(){
   const match=matches[0];remoteAircraft=match;remoteFoundAt=Date.now();
   data=data.filter(a=>a.hex!==match.hex).concat(match);
   // Show the whole trip (not just a follow-zoom): turn the route on, load the plan, then fit the map to it.
-  sel=match.hex;follow=false;trailOn=true;
+  homeMode=false;sel=match.hex;follow=false;trailOn=true;
    lookupAirports(match);
   searchError="Found "+nm(match)+" via "+source+(resolved!==query?" ("+query+" → "+resolved+")":"")+" — loading filed route and flown path…";
   const t=trails[match.hex]||(trails[match.hex]=[]);t.push([match.lat,match.lon]);
@@ -468,7 +468,14 @@ $("view").addEventListener("click",e=>{
  const b=e.target.closest("[data-l]");if(b){cfg[b.dataset.l]=!cfg[b.dataset.l];save();layers();renderView()}
  const m=e.target.closest("[data-b]");if(m){cfg.base=m.dataset.b;save();setBase(cfg.base);drawHome();renderView()}});
 $("nav").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;view=b.dataset.v;document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("on",x===b));renderView()});
-$("sb").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;filter=b.dataset.f;document.querySelectorAll("#sb button").forEach(x=>x.classList.toggle("on",x===b));draw()});
+function returnHome(){
+ homeMode=true;follow=false;trailOn=false;sel=null;routePts=[];remoteAircraft=null;remoteFoundAt=0;
+ trL.clearLayers();map.stop();map.setView([me.lat,me.lon],10);
+ filter="all";document.querySelectorAll("#sb [data-f]").forEach(b=>b.classList.toggle("on",b.dataset.f==="all"));
+ view="traffic";document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("on",b.dataset.v==="traffic"));
+ draw();
+}
+$("sb").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;if(b.id==="homeBtn"){returnHome();return}filter=b.dataset.f;document.querySelectorAll("#sb button").forEach(x=>x.classList.toggle("on",x===b));draw()});
 
 // ---------- weather (METAR from nearest airport, Open-Meteo fallback) ----------
 const cvTxt={CLR:"Clear",SKC:"Clear",FEW:"Mostly Clear",SCT:"Partly Cloudy",BKN:"Mostly Cloudy",OVC:"Overcast"},cvIc={CLR:"☀️",SKC:"☀️",FEW:"🌤",SCT:"⛅",BKN:"🌥",OVC:"☁️"};
@@ -520,7 +527,7 @@ async function loadWx(){
 // ---------- GPS, clock, status ----------
 async function loadTz(){try{const j=await(await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${me.lat}&longitude=${me.lon}&current=temperature_2m&timezone=auto`)).json();new Intl.DateTimeFormat([],{timeZone:j.timezone});tz=j.timezone;tick()}catch(e){}}
 let gw=null,first=true;
-function setMe(la,lo,gps){me={lat:la,lon:lo,gps};drawHome();map.setView([la,lo],map.getZoom());load();loadWx();loadTz();$("sG").className=gps?"ok":"mu";$("sG").textContent=gps?"Fix":"Manual"}
+function setMe(la,lo,gps){me={lat:la,lon:lo,gps};drawHome();if(homeMode)map.setView([la,lo],map.getZoom());load();loadWx();loadTz();$("sG").className=gps?"ok":"mu";$("sG").textContent=gps?"Fix":"Manual"}
 if(navigator.geolocation&&cfg.lat==null){
  gw=navigator.geolocation.watchPosition(p=>{
   const moved=dist(me.lat,me.lon,p.coords.latitude,p.coords.longitude)>0.5;
