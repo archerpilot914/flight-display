@@ -41,7 +41,7 @@ input,select{width:100%;padding:9px;background:var(--bg);color:var(--tx);border:
 .rl{background:#0a1628d0;padding:1px 6px;border-radius:4px;color:#fff;font-size:12px;font-weight:600;text-shadow:0 0 3px #000;white-space:nowrap}
 .me{width:16px;height:16px;border-radius:50%;background:#38bdf8;border:3px solid #fff;margin:-8px 0 0 -8px;box-shadow:0 0 8px #38bdf8}
 #sel .photo{float:right;width:44%;max-height:96px;object-fit:cover;border-radius:6px;margin:0 0 6px 8px}
-.phw{float:right;width:44%;margin:0 0 6px 8px}.phw img{width:100%;max-height:110px;object-fit:cover;border-radius:6px;display:block}.credit{font-size:10px;color:var(--mu);text-align:right;margin-top:2px}.credit a{color:var(--mu)}
+.photo-status{float:right;width:44%;text-align:right;font-size:11px;margin:0 0 6px 8px}.photo-retry{font-size:11px;padding:2px 7px;margin-left:4px}.phw{float:right;width:44%;margin:0 0 6px 8px}.phw img{width:100%;max-height:110px;object-fit:cover;border-radius:6px;display:block}.credit{font-size:10px;color:var(--mu);text-align:right;margin-top:2px}.credit a{color:var(--mu)}
 @media(max-aspect-ratio:1/1){#app{grid-template-columns:1fr;grid-template-rows:auto 55vh auto 1fr auto;overflow:auto}#top{grid-column:1;overflow-x:auto}#nav{grid-column:1;grid-template-columns:repeat(3,1fr)}html,body{overflow:auto}#app{height:auto}}
 </style></head><body>
 <div id="app">
@@ -312,6 +312,7 @@ async function loadPhoto(a){
   if(!res.ok)throw Error("Photo service unavailable");
   const j=await res.json();
   if(j.photo&&psOk(j.photo.src)&&psOk(j.photo.link))e.photo=j.photo;
+  else if(j.error)throw Error(j.error);
   e.status=e.photo?"ok":"none";
  }catch(err){e.status="error";console.warn("Aircraft photo unavailable",err)}
  if(sel&&String(sel).toLowerCase()===hex)renderSel();
@@ -320,12 +321,13 @@ function photoHtml(a){
  const custom=photos[(a.t||"").toUpperCase()];
  if(custom)return `<img class="photo" src="${custom}">`;
  const hex=String(a.hex||"").toLowerCase(),e=psCache.get(hex);
- if(!e||(["none","error"].includes(e.status)&&Date.now()-e.time>3600000)){loadPhoto(a);return '<div class="mu" style="float:right;font-size:11px">Loading photo…</div>'}
- if(e.status==="loading")return '<div class="mu" style="float:right;font-size:11px">Loading photo…</div>';
- if(e.status!=="ok")return '<div class="mu" style="float:right;font-size:11px">No aircraft photo available</div>';
+ if(!e||(["none","error"].includes(e.status)&&Date.now()-e.time>3600000)){loadPhoto(a);return '<div class="mu photo-status">Searching for aircraft photo…</div>'}
+ if(e.status==="loading")return '<div class="mu photo-status">Searching for aircraft photo…</div>';
+ if(e.status!=="ok")return '<div class="mu photo-status">'+(e.status==="error"?'Photo lookup unavailable':'No photo of this aircraft found')+' <button class="photo-retry" type="button" onclick="retryAircraftPhoto()">Retry</button></div>';
  const ph=e.photo;
  return `<div class="phw"><a href="${esc(ph.link)}" target="_blank" rel="noopener"><img src="${esc(ph.src)}" alt="Photograph of selected aircraft" onerror="this.style.display='none'"></a><div class="credit">Photo: ${esc(ph.by)} • <a href="${esc(ph.link)}" target="_blank" rel="noopener">Planespotters.net</a></div></div>`;
 }
+function retryAircraftPhoto(){const a=data.find(x=>x.hex===sel);if(!a)return;psCache.delete(String(a.hex||"").toLowerCase());renderSel()}
 function renderSel(){
  const a=data.find(x=>x.hex===sel),el=$("sel");
  if(!a){el.innerHTML=`<h2>Select aircraft</h2><div class="mu">Tap a plane on the map or in the list${sel?" — selected aircraft is out of range":""}</div>`;return}
