@@ -28,6 +28,20 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--tx);font:16px sy
 .row{display:flex;gap:6px}.row button{flex:1}
 button{font:inherit;color:var(--tx);background:#0f213b;border:1px solid var(--ln);border-radius:8px;padding:9px 6px}button.on{background:var(--ac);border-color:var(--ac)}
 #view{flex:1;min-height:0;overflow:auto;padding:14px 16px;font-size:17px;line-height:1.4}
+#searchPanel{display:flex;flex-direction:column;gap:10px}
+#searchPanel .search-bar{display:flex;gap:8px;align-items:stretch}
+#searchPanel #qi{flex:1;min-width:0;margin:0;padding:14px;font-size:20px;border:2px solid #35649c;outline:none}
+#searchPanel #qi:focus{border-color:#62b5ff;box-shadow:0 0 0 2px #267dcb55}
+#searchPanel #lookup{min-width:100px;font-weight:700}
+#searchPanel .search-status{font-size:14px;line-height:1.5;min-height:40px}
+#kbToggle{width:100%;font-size:15px;min-height:40px}
+#flightKeyboard{display:grid;gap:5px;max-width:550px;margin:0 auto;width:100%;touch-action:manipulation;user-select:none}
+#flightKeyboard .key-row{display:flex;gap:5px;justify-content:center}
+#flightKeyboard button{flex:1;min-width:0;min-height:43px;padding:5px 0;font-size:18px;font-weight:650;background:#193452;border-color:#38638b}
+#flightKeyboard button.wide{flex:1.7;background:#245281;font-size:15px}
+#flightKeyboard button.go{background:#2064c0}
+#flightKeyboard[hidden]{display:none!important}
+@media(max-width:600px){#flightKeyboard button{min-height:39px;font-size:15px}#searchPanel #qi{font-size:17px}}
 table{width:100%;border-collapse:collapse;font-size:16px}th{color:var(--mu);font-weight:500;text-align:left;position:sticky;top:0;background:var(--pn)}
 td,th{padding:8px 4px;border-bottom:1px solid #12243f}tr.r{cursor:pointer}tr.r.s{background:#12305c}
 input,select{width:100%;padding:9px;background:var(--bg);color:var(--tx);border:1px solid var(--ln);border-radius:8px;font:inherit;margin:4px 0}
@@ -95,7 +109,7 @@ const shrink=(f,cb)=>{const r=new FileReader();r.onload=()=>{const i=new Image()
 let tz;
 const CC={VFR:"#22c55e",MVFR:"#3b82f6",IFR:"#ec4899",LIFR:"#a855f7",NA:"#6b7280"};let cats={};
 let me={lat:cfg.lat??43.5727,lon:cfg.lon??-71.4189,gps:false}, data=[], filter="all", view="traffic", sel=null, follow=false, trailOn=false, src=0, wx=null, trails={}, mk={}, q="";
-let remoteAircraft=null,remoteFoundAt=0,searchError="",searchBusy=false,routePts=[],homeMode=true;
+let remoteAircraft=null,remoteFoundAt=0,searchError="",searchBusy=false,routePts=[],homeMode=true,keyboardOpen=true;
 const routeCache=new Map();
 const rad=x=>x*Math.PI/180;
 const dist=(a,b,c,d)=>{const p=rad(c-a),r=rad(d-b),x=Math.sin(p/2)**2+Math.cos(rad(a))*Math.cos(rad(c))*Math.sin(r/2)**2;return 6371000*2*Math.asin(Math.sqrt(x))/NM};
@@ -337,7 +351,7 @@ function draw(){
  const a=data.find(x=>x.hex===sel);
  if(a&&trailOn)drawFlightPlan(a);
  if(a&&follow&&!motion.has(a.hex))map.panTo([a.lat,a.lon],{animate:false});
- renderSel();if(view==="traffic"||view==="search")renderView();
+ renderSel();if(view==="traffic"||(view==="search"&&document.activeElement!==$("qi")))renderView();
 }
 function pick(h){homeMode=false;sel=h;const a=data.find(x=>x.hex===h);if(a){map.panTo([a.lat,a.lon]);lookupAirports(a);lookupRoute(a,false)}draw()}
 const card=a=>{const d=dme(a),b=(Math.atan2(Math.sin(rad(a.lon-me.lon))*Math.cos(rad(a.lat)),Math.cos(rad(me.lat))*Math.sin(rad(a.lat))-Math.sin(rad(me.lat))*Math.cos(rad(a.lat))*Math.cos(rad(a.lon-me.lon)))*180/Math.PI+360)%360;return[d,b]};
@@ -405,8 +419,8 @@ function flightSearchQueries(input){
 async function lookupFlight(){
  const query=q.trim().toUpperCase().replace(/\s+/g,"");
  const queries=flightSearchQueries(query);
- if(!/^[A-Z0-9-]{3,12}$/.test(query)){searchError="Enter a valid callsign, registration or ICAO hex (3–12 characters).";renderView();return}
- searchBusy=true;searchError="";renderView();
+ if(!/^[A-Z0-9-]{3,12}$/.test(query)){searchError="Enter a valid callsign, registration or ICAO hex (3–12 characters).";updateSearchStatus();return}
+ searchBusy=true;searchError="";updateSearchStatus();
  try{
   let matches=[],source="",resolved="";
   for(const candidate of queries){
@@ -416,7 +430,7 @@ async function lookupFlight(){
    matches=(payload.ac||[]).filter(a=>a.hex&&Number.isFinite(Number(a.lat))&&Number.isFinite(Number(a.lon)));
    if(matches.length){source=payload.source||"internet";resolved=candidate;break}
   }
-  if(!matches.length){searchError="No currently reporting aircraft found for "+query+(queries.length>1?" (also tried "+queries[0]+")":"");return}
+  if(!matches.length){searchError="No currently reporting aircraft found for "+query+(queries.length>1?" (also tried "+queries[0]+")":"");updateSearchStatus();return}
   const match=matches[0];remoteAircraft=match;remoteFoundAt=Date.now();
   data=data.filter(a=>a.hex!==match.hex).concat(match);
   // Show the whole trip (not just a follow-zoom): turn the route on, load the plan, then fit the map to it.
@@ -424,11 +438,32 @@ async function lookupFlight(){
    lookupAirports(match);
   searchError="Found "+nm(match)+" via "+source+(resolved!==query?" ("+query+" → "+resolved+")":"")+" — loading filed route and flown path…";
   const t=trails[match.hex]||(trails[match.hex]=[]);t.push([match.lat,match.lon]);
-  map.flyTo([match.lat,match.lon],Math.max(map.getZoom(),8));
+  map.flyTo([match.lat,match.lon],12,{duration:1});
   draw();
-  lookupRoute(match,true).then(()=>{if(sel===match.hex){searchError="Found "+nm(match)+" via "+source+". Tap Follow to keep it centered.";draw();fitRoute();renderView()}});
+  lookupRoute(match,true).then(()=>{if(sel===match.hex){searchError="Found "+nm(match)+" via "+source+". Tap Follow to keep it centered.";draw();updateSearchStatus()}});
  }catch(e){searchError="Flight search unavailable: "+e.message}
- finally{searchBusy=false;renderView()}
+ finally{searchBusy=false;updateSearchStatus()}
+}
+function updateSearchStatus(){
+ const status=$("searchStatus");if(status)status.textContent=searchError||"Search by flight number, registration or ICAO hex. Results depend on live ADS-B coverage.";
+ const go=$("lookup");if(go){go.disabled=searchBusy;go.textContent=searchBusy?"Searching…":"Search";}
+}
+function keyboardHtml(){
+ const rows=["1234567890","QWERTYUIOP","ASDFGHJKL","ZXCVBNM"];
+ return '<div id="flightKeyboard"'+(keyboardOpen?"":' hidden')+'>'+rows.map(chars=>'<div class="key-row">'+[...chars].map(c=>'<button type="button" data-key="'+c+'">'+c+'</button>').join("")+'</div>').join("")+
+ '<div class="key-row"><button type="button" class="wide" data-key="BACK">⌫ Delete</button><button type="button" class="wide" data-key="CLEAR">Clear</button><button type="button" class="wide go" data-key="GO">Search ↵</button></div></div>';
+}
+function searchKey(key){
+ const field=$("qi");if(!field)return;
+ if(key==="GO"){lookupFlight();return}
+ if(key==="CLEAR"){field.value="";q=""}
+ else{
+  const start=field.selectionStart??field.value.length,end=field.selectionEnd??field.value.length;
+  if(key==="BACK"){const from=start===end?Math.max(0,start-1):start;field.setRangeText("",from,end,"start")}
+  else field.setRangeText(key,start,end,"end");
+  q=field.value;
+ }
+ searchError="";updateSearchStatus();field.focus({preventScroll:true});
 }
 function renderView(){
  const v=$("view");
@@ -438,10 +473,16 @@ function renderView(){
   $("nr").onchange=e=>{cfg.nr=+e.target.value;save();renderView()};
  }else if(view==="search"){
   const t=q.toLowerCase(),l=t?data.filter(a=>[a.flight,a.r,a.hex,a.t].join(" ").toLowerCase().includes(t)).slice(0,50):[];
-  v.innerHTML=`<b>Find a flight anywhere</b><div class="row" style="margin:7px 0"><input id="qi" placeholder="DL123, UA54, N123AB or ICAO hex" value="${esc(q)}" style="flex:1"><button id="lookup" style="min-width:78px" ${searchBusy?"disabled":""}>${searchBusy?"Searching…":"Search"}</button></div><div class="mu">${esc(searchError||"Use DL123, UA54, AC123, an ICAO callsign, registration, or hex. Finds the aircraft anywhere ADS-B volunteers cover, then draws its filed route and flown path.")}</div>${t?head+rows(l)+"</tbody></table>":""}`;
-  const i=$("qi");i.oninput=e=>{q=e.target.value;searchError="";};
+  if($("searchPanel")&&document.activeElement===$("qi")){updateSearchStatus();return}
+  v.innerHTML=`<div id="searchPanel"><b style="font-size:21px">Find a flight anywhere</b><div class="search-bar"><input id="qi" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="DL123 • N123AB • ICAO hex" value="${esc(q)}"><button id="lookup" type="button">Search</button></div><div class="search-status mu" id="searchStatus"></div><button id="kbToggle" type="button" aria-expanded="${keyboardOpen}">${keyboardOpen?"⌨ Hide on-screen keyboard":"⌨ Show on-screen keyboard"}</button>${keyboardHtml()}${t?head+rows(l)+"</tbody></table>":""}</div>`;
+  const i=$("qi");
+  i.oninput=e=>{q=e.target.value;searchError="";updateSearchStatus()};
   i.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();lookupFlight()}};
   $("lookup").onclick=lookupFlight;
+  $("kbToggle").onclick=()=>{keyboardOpen=!keyboardOpen;$("flightKeyboard").hidden=!keyboardOpen;$("kbToggle").textContent=keyboardOpen?"⌨ Hide on-screen keyboard":"⌨ Show on-screen keyboard";$("kbToggle").setAttribute("aria-expanded",String(keyboardOpen))};
+  $("flightKeyboard").addEventListener("pointerdown",e=>{if(e.target.closest("[data-key]"))e.preventDefault()});
+  $("flightKeyboard").addEventListener("click",e=>{const b=e.target.closest("[data-key]");if(b)searchKey(b.dataset.key)});
+  updateSearchStatus();
  }else if(view==="airports"){
   v.innerHTML="<b>Nearby airports</b><table><tbody>"+AP.map(([id,n,la,lo])=>[id,n,la,lo,dist(me.lat,me.lon,la,lo)]).sort((a,b)=>a[4]-b[4]).map(([id,n,la,lo,d])=>`<tr class="r" data-ap="${la},${lo}"><td><span style="color:${CC[cats[id]]||CC.NA}">●</span> <b>${id}</b> <span class="mu">${cats[id]||""}</span></td><td>${n}</td><td>${d.toFixed(1)} NM</td></tr>`).join("")+"</tbody></table>";
  }else if(view==="weather"){
