@@ -117,20 +117,47 @@ export default {
       if (!/^[0-9a-f]{6}$/.test(hex)) return json({ error: "invalid hex" }, 400);
       const validUrl = (value) => {
         try { const u = new URL(value); return u.protocol === "https:" &&
-          (u.hostname === "planespotters.net" || u.hostname.endsWith(".planespotters.net")); }
+          ["planespotters.net", "plnspttrs.net"].some(d => u.hostname === d || u.hostname.endsWith("." + d)); }
         catch { return false; }
       };
-      for (const path of ["hex/" + hex, ...(/^[A-Z0-9-]{3,12}$/.test(reg) ? ["reg/" + encodeURIComponent(reg)] : [])]) {
+      const tries = [
+        "https://api.planespotters.net/pub/photos/hex/" + hex,
+        "https://api.adsb.lol/0/planespotters_net/hex/" + hex +
+          (/^[A-Z0-9-]{3,12}$/.test(reg) ? "?reg=" + encodeURIComponent(reg) : ""),
+        ...(/^[A-Z0-9-]{3,12}$/.test(reg) ? ["https://api.planespotters.net/pub/photos/reg/" + encodeURIComponent(reg)] : [])
+      ];
+      let available = false, failed = 0;
+      for (const target of tries) {
         try {
-          const upstream = await get("https://api.planespotters.net/pub/photos/" + path, 3600);
-          if (!upstream.ok) continue;
-          const ph = ((await upstream.json()).photos || [])[0];
-          const src = ph && ((ph.thumbnail_large && ph.thumbnail_large.src) || (ph.thumbnail && ph.thumbnail.src));
-          if (src && validUrl(src) && validUrl(ph.link))
-            return json({ photo: { src, link: ph.link, by: ph.photographer || "Unknown" } }, 200, 3600);
-        } catch (err) { /* try registration or return unavailable */ }
+          const up = await get(target, 300);
+          if (!up.ok) { failed++; continue; }
+          available = true;
+          const data = await up.json();
+          for (const ph of (data.photos || [])) {
+            const src = (ph.thumbnail_large && ph.thumbnail_large.src) || (ph.thumbnail && ph.thumbnail.src);
+            if (src && validUrl(src) && validUrl(ph.link))
+              return json({ photo: { src, link: ph.link, by: ph.photographer || "Unknown" } }, 200, 3600);
+          }
+        } catch (err) { failed++; }
       }
-      return json({ photo: null, reason: "not_found_or_provider_unavailable" }, 200, 300);
+      return json({ photo: null, reason: available ? "no_photo" : "provider_unavailable", attempted: tries.length }, 200, 120);
+    }
+
+    if (p === "/api/airports") {
+      const cs = (q.get("callsign") || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 10).toUpperCase();
+      if (cs.length < 3) return json({ error: "callsign required" }, 400);
+      try {
+        const r = await get("https://api.adsbdb.com/v0/callsign/" + encodeURIComponent(cs), 3600);
+        if (r.ok) {
+          const j = await r.json();
+          const fr = (j.response || {}).flightroute;
+          if (fr && fr.origin && fr.destination) {
+            const ap = a => ({ icao:a.icao_code||null, iata:a.iata_code||null, name:a.name||null });
+            return json({ origin:ap(fr.origin),destination:ap(fr.destination),source:"adsbdb" },200,3600);
+          }
+        }
+      } catch(err) { /* flight not listed or provider offline */ }
+      return json({origin:null,destination:null,source:null},200,300);
     }
 
     if (/\/search$/.test(p)) return json(await search(q.get("query") || ""), 200, 5);
