@@ -41,6 +41,7 @@ input,select{width:100%;padding:9px;background:var(--bg);color:var(--tx);border:
 .rl{background:#0a1628d0;padding:1px 6px;border-radius:4px;color:#fff;font-size:12px;font-weight:600;text-shadow:0 0 3px #000;white-space:nowrap}
 .me{width:16px;height:16px;border-radius:50%;background:#38bdf8;border:3px solid #fff;margin:-8px 0 0 -8px;box-shadow:0 0 8px #38bdf8}
 #sel .photo{float:right;width:44%;max-height:96px;object-fit:cover;border-radius:6px;margin:0 0 6px 8px}
+.phw{float:right;width:44%;margin:0 0 6px 8px}.phw img{width:100%;max-height:110px;object-fit:cover;border-radius:6px;display:block}.credit{font-size:10px;color:var(--mu);text-align:right;margin-top:2px}.credit a{color:var(--mu)}
 @media(max-aspect-ratio:1/1){#app{grid-template-columns:1fr;grid-template-rows:auto 55vh auto 1fr auto;overflow:auto}#top{grid-column:1;overflow-x:auto}#nav{grid-column:1;grid-template-columns:repeat(3,1fr)}html,body{overflow:auto}#app{height:auto}}
 </style></head><body>
 <div id="app">
@@ -299,11 +300,39 @@ function draw(){
 }
 function pick(h){sel=h;const a=data.find(x=>x.hex===h);if(a)map.panTo([a.lat,a.lon]);draw()}
 const card=a=>{const d=dme(a),b=(Math.atan2(Math.sin(rad(a.lon-me.lon))*Math.cos(rad(a.lat)),Math.cos(rad(me.lat))*Math.sin(rad(a.lat))-Math.sin(rad(me.lat))*Math.cos(rad(a.lat))*Math.cos(rad(a.lon-me.lon)))*180/Math.PI+360)%360;return[d,b]};
+// Manually saved type photos take precedence; otherwise try a photo of this particular airframe.
+const psCache=new Map();
+const psOk=(u)=>{try{const x=new URL(u);return x.protocol==="https:"&&(x.hostname==="planespotters.net"||x.hostname.endsWith(".planespotters.net"))}catch(e){return false}};
+async function loadPhoto(a){
+ const hex=String(a.hex||"").toLowerCase();if(!/^[0-9a-f]{6}$/.test(hex))return;
+ const e={status:"loading",time:Date.now()};psCache.set(hex,e);
+ const tries=["hex/"+encodeURIComponent(hex)];if(a.r)tries.push("reg/"+encodeURIComponent(a.r));
+ for(const t of tries){
+  try{
+   const r=await fetch("https://api.planespotters.net/pub/photos/"+t,{signal:AbortSignal.timeout(8000)});
+   if(!r.ok)continue;
+   const ph=((await r.json()).photos||[])[0];
+   const src=ph&&((ph.thumbnail_large&&ph.thumbnail_large.src)||(ph.thumbnail&&ph.thumbnail.src));
+   if(src&&psOk(src)&&psOk(ph.link)){e.photo={src,link:ph.link,by:ph.photographer||"Unknown"};break}
+  }catch(x){}
+ }
+ e.status=e.photo?"ok":"none";
+ if(sel===hex)renderSel();
+}
+function photoHtml(a){
+ const custom=photos[(a.t||"").toUpperCase()];
+ if(custom)return `<img class="photo" src="${custom}">`;
+ const hex=String(a.hex||"").toLowerCase(),e=psCache.get(hex);
+ if(!e||(e.status==="none"&&Date.now()-e.time>3600000)){loadPhoto(a);return""}
+ if(e.status!=="ok")return"";
+ const ph=e.photo;
+ return `<div class="phw"><a href="${esc(ph.link)}" target="_blank" rel="noopener"><img src="${esc(ph.src)}" alt="Photograph of selected aircraft"></a><div class="credit">Photo: ${esc(ph.by)} • <a href="${esc(ph.link)}" target="_blank" rel="noopener">Planespotters.net</a></div></div>`;
+}
 function renderSel(){
  const a=data.find(x=>x.hex===sel),el=$("sel");
  if(!a){el.innerHTML=`<h2>Select aircraft</h2><div class="mu">Tap a plane on the map or in the list${sel?" — selected aircraft is out of range":""}</div>`;return}
  const [d,b]=card(a),vr=a.baro_rate;
- el.innerHTML=`${photos[(a.t||"").toUpperCase()]?`<img class="photo" src="${photos[(a.t||"").toUpperCase()]}">`:""}<h2><span style="color:${COL[kind(a)]}">★</span> ${esc(nm(a))}</h2><div class="mu">${esc(a.desc||a.t||"Unknown type")} ${a.r?"• "+esc(a.r):""}</div>${routeDetails(a)}
+ el.innerHTML=`${photoHtml(a)}<h2><span style="color:${COL[kind(a)]}">★</span> ${esc(nm(a))}</h2><div class="mu">${esc(a.desc||a.t||"Unknown type")} ${a.r?"• "+esc(a.r):""}</div>${routeDetails(a)}
  <div class="g"><div><span>Altitude</span><b>${alt(a)} ft</b></div><div><span>Squawk</span><b>${esc(a.squawk||"—")}</b></div>
  <div><span>Ground speed</span><b>${a.gs!=null?Math.round(a.gs)+" kt":"—"}</b></div><div><span>Type</span><b>${esc(a.t||"—")}</b></div>
  <div><span>Heading</span><b>${a.track!=null?Math.round(a.track)+"°":"—"}</b></div><div><span>Registration</span><b>${esc(a.r||"—")}</b></div>
@@ -385,7 +414,7 @@ function renderView(){
   <button id="ap" style="width:100%">Set position manually (disables GPS follow)</button>
   <p><b>Refresh interval (seconds, min 10)</b></p><input id="pl" type="number" min="10" value="${cfg.poll}"><button id="ps" style="width:100%">Save</button>
   <p><b>Data relay URL (optional)</b></p><input id="rl" placeholder="https://your-worker.workers.dev" value="${esc(cfg.relay||"")}"><button id="rs" style="width:100%">Save relay</button>
-  <p><b>Aircraft photos</b></p><div class="mu">Add a photo for an aircraft type (ICAO type code such as B738 or C172). It shows whenever that type is selected.</div>
+  <p><b>Aircraft photos</b></p><div class="mu">Add a photo for an aircraft type (ICAO type code such as B738 or C172). It shows whenever that type is selected. Types without your own photo automatically show that aircraft’s own photo from Planespotters.net, with credit, when one exists.</div>
   <input id="pt" placeholder="Type code, e.g. B738" value="${esc((data.find(x=>x.hex===sel)||{}).t||"")}"><input id="pf" type="file" accept="image/*"><button id="pa" style="width:100%">Add photo</button>
   <div>${Object.entries(photos).map(([t,u])=>`<div class="row" style="align-items:center;margin-top:6px"><img src="${u}" style="width:70px;height:46px;object-fit:cover;border-radius:4px"><b style="flex:2">${esc(t)}</b><button data-dp="${esc(t)}">Delete</button></div>`).join("")}</div>`;
   $("rs").onclick=()=>{cfg.relay=$("rl").value.trim();src=0;save();load();loadWx();loadCats()};
