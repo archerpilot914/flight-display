@@ -42,16 +42,68 @@ async function search(raw) {
   return { ac: [], source: null };
 }
 
-async function plan(env, ident, hex) {
-  const out = { ident, origin: null, destination: null, airline: null, route: "", filed: [], actual: [], sources: {} };
+// ---- geometry + airport helpers (used to verify routes against what the aircraft actually did) ----
+const R_NM = 3440.065, rd = (d) => (d * Math.PI) / 180;
+const dNM = (a, b, c, d) => { const p = rd(c - a), l = rd(d - b), x = Math.sin(p / 2) ** 2 + Math.cos(rd(a)) * Math.cos(rd(c)) * Math.sin(l / 2) ** 2; return 2 * R_NM * Math.asin(Math.sqrt(x)); };
+const brg = (a, b, c, d) => { const y = Math.sin(rd(d - b)) * Math.cos(rd(c)), x = Math.cos(rd(a)) * Math.sin(rd(c)) - Math.sin(rd(a)) * Math.cos(rd(c)) * Math.cos(rd(d - b)); return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360; };
+function xtrack(o, d, p) { // nautical miles from point p to the great circle o -> d
+  const d13 = dNM(o[0], o[1], p[0], p[1]) / R_NM, t13 = rd(brg(o[0], o[1], p[0], p[1])), t12 = rd(brg(o[0], o[1], d[0], d[1]));
+  return Math.abs(Math.asin(Math.sin(d13) * Math.sin(t13 - t12)) * R_NM);
+}
+function plausible(o, d, pos) { // is an aircraft at pos (with heading pos.trk) really flying o -> d?
+  if (xtrack(o, d, pos) > 60) return false;
+  const left = dNM(pos[0], pos[1], d[0], d[1]);
+  if (left > 30 && pos.trk != null) {
+    const diff = Math.abs(((brg(pos[0], pos[1], d[0], d[1]) - pos.trk + 540) % 360) - 180);
+    if (diff > 75) return false;
+  }
+  return true;
+}
+const APTS = ("KBOS|BOS|Boston Logan|42.3643|-71.0052;KPWM|PWM|Portland|43.6462|-70.3093;KMHT|MHT|Manchester|42.9326|-71.4357;KCON|CON|Concord|43.2027|-71.5023;KLCI|LCI|Laconia|43.5727|-71.4189;KPSM|PSM|Portsmouth|43.0779|-70.8233;KBGR|BGR|Bangor|44.8074|-68.8281;KBTV|BTV|Burlington|44.4720|-73.1533;KALB|ALB|Albany|42.7483|-73.8017;KBDL|BDL|Hartford Bradley|41.9389|-72.6832;KPVD|PVD|Providence|41.7233|-71.4282;KHPN|HPN|White Plains|41.0670|-73.7076;KLGA|LGA|LaGuardia|40.7769|-73.8740;KJFK|JFK|New York JFK|40.6398|-73.7789;KEWR|EWR|Newark|40.6925|-74.1687;KPHL|PHL|Philadelphia|39.8719|-75.2411;KBWI|BWI|Baltimore|39.1754|-76.6683;KDCA|DCA|Washington National|38.8521|-77.0377;KIAD|IAD|Washington Dulles|38.9445|-77.4558;KORD|ORD|Chicago O'Hare|41.9786|-87.9048;KMDW|MDW|Chicago Midway|41.7868|-87.7522;KATL|ATL|Atlanta|33.6367|-84.4281;KCLT|CLT|Charlotte|35.2140|-80.9431;KMCO|MCO|Orlando|28.4294|-81.3089;KMIA|MIA|Miami|25.7959|-80.2870;KFLL|FLL|Fort Lauderdale|26.0726|-80.1527;KTPA|TPA|Tampa|27.9755|-82.5332;KDTW|DTW|Detroit|42.2124|-83.3534;KCLE|CLE|Cleveland|41.4117|-81.8498;KPIT|PIT|Pittsburgh|40.4915|-80.2329;KCVG|CVG|Cincinnati|39.0488|-84.6678;KDFW|DFW|Dallas Fort Worth|32.8998|-97.0403;KIAH|IAH|Houston|29.9844|-95.3414;KAUS|AUS|Austin|30.1975|-97.6664;KDEN|DEN|Denver|39.8561|-104.6737;KLAX|LAX|Los Angeles|33.9416|-118.4085;KSFO|SFO|San Francisco|37.6213|-122.3790;KSEA|SEA|Seattle|47.4502|-122.3088;KLAS|LAS|Las Vegas|36.0840|-115.1537;KPHX|PHX|Phoenix|33.4343|-112.0116;KMSP|MSP|Minneapolis|44.8848|-93.2223;KSTL|STL|St. Louis|38.7487|-90.3700;KBUF|BUF|Buffalo|42.9405|-78.7322;KROC|ROC|Rochester NY|43.1189|-77.6724;KSYR|SYR|Syracuse|43.1112|-76.1063;KORF|ORF|Norfolk|36.8946|-76.2012;KRDU|RDU|Raleigh Durham|35.8776|-78.7875;KBNA|BNA|Nashville|36.1245|-86.6782;KMSY|MSY|New Orleans|29.9934|-90.2580;KSAN|SAN|San Diego|32.7336|-117.1897;KSLC|SLC|Salt Lake City|40.7884|-111.9778;KPDX|PDX|Portland OR|45.5887|-122.5975;KBED|BED|Hanscom|42.4700|-71.2890;KORH|ORH|Worcester|42.2673|-71.8757;KEEN|EEN|Keene|42.8984|-72.2708;KLEB|LEB|Lebanon|43.6261|-72.3042;KASH|ASH|Nashua|42.7817|-71.5148;KSFM|SFM|Sanford|43.3939|-70.7088;KDAW|DAW|Rochester NH|43.2841|-71.0292;KHYA|HYA|Hyannis|41.6693|-70.2804;KACK|ACK|Nantucket|41.2531|-70.0603;KMVY|MVY|Martha's Vineyard|41.3931|-70.6143;KISP|ISP|Islip|40.7952|-73.1002;KSWF|SWF|Stewart|41.5041|-74.1048;KTEB|TEB|Teterboro|40.8501|-74.0608;CYUL|YUL|Montreal|45.4706|-73.7408;CYYZ|YYZ|Toronto|43.6777|-79.6248;CYOW|YOW|Ottawa|45.3225|-75.6692;CYQB|YQB|Quebec City|46.7911|-71.3933;CYHZ|YHZ|Halifax|44.8808|-63.5086").split(";").map((s) => { const p = s.split("|"); return { icao: p[0], iata: p[1], name: p[2], latitude: +p[3], longitude: +p[4] }; });
+function nearestApt(lat, lon, maxNM) {
+  let best = null, bd = maxNM;
+  for (const a of APTS) { const d = dNM(lat, lon, a.latitude, a.longitude); if (d < bd) { bd = d; best = a; } }
+  return best;
+}
+// The most recent takeoff in today's ADS-B trace = the last point the aircraft reported "ground" before flying on.
+function departureOf(j) {
+  const rows = j.trace || [];
+  let idx = -1;
+  for (let i = 0; i < rows.length; i++) if (rows[i][3] === "ground") idx = i;
+  if (idx < 0 || idx >= rows.length - 1) return null;
+  const r = rows[idx], lat = num(r[1]), lon = num(r[2]);
+  if (lat === null || lon === null) return null;
+  return { lat, lon, time: (num(j.timestamp) || 0) + (num(r[0]) || 0), airport: nearestApt(lat, lon, 8) };
+}
+
+async function plan(env, ident, hex, pos) {
+  const out = { ident, origin: null, destination: null, airline: null, route: "", filed: [], actual: [], departure: null, notes: [], sources: {} };
   const apt = (a, fix) => a ? { icao: a.code_icao || a.code || null, iata: a.code_iata || null, name: a.name || null, city: a.city || null, latitude: fix ? num(fix.latitude) : null, longitude: fix ? num(fix.longitude) : null } : null;
+  const okA = (a) => a && a.latitude !== null && a.longitude !== null;
   let faTrack = [];
 
-  // 1) Filed route from FlightAware AeroAPI (only if a key is configured)
+  // 1) Today's ADS-B trace: the flown path and where this aircraft actually took off
+  if (/^[0-9a-f]{6}$/i.test(hex || "")) {
+    const h = hex.toLowerCase();
+    for (const base of ["https://globe.adsb.lol", "https://adsb.lol"]) {
+      try {
+        const r = await get(`${base}/data/traces/${h.slice(-2)}/trace_full_${h}.json`, 30);
+        if (!r.ok) continue;
+        const j = await r.json();
+        const pts = (j.trace || []).filter((p) => num(p[1]) !== null && num(p[2]) !== null).map((p) => [p[1], p[2]]);
+        if (pts.length > 1) { out.actual = thin(pts, 400); out.sources.actual = "adsb.lol"; }
+        const dep = departureOf(j);
+        if (dep) { out.departure = { time: dep.time, airport: dep.airport, latitude: dep.lat, longitude: dep.lon }; }
+        break;
+      } catch (e) { /* try next */ }
+    }
+  }
+
+  // 2) The filed flight plan for the flight that is airborne right now (FlightAware AeroAPI, needs a key)
   if (env.AEROAPI_KEY) {
     try {
       const h = { "x-apikey": env.AEROAPI_KEY };
-      const fa = (u) => get("https://aeroapi.flightaware.com/aeroapi" + u, 300, h);
+      const fa = (u) => get("https://aeroapi.flightaware.com/aeroapi" + u, 60, h);
       const r = await fa(`/flights/${encodeURIComponent(ident)}?max_pages=1`);
       if (r.ok) {
         const flights = (await r.json()).flights || [];
@@ -72,35 +124,37 @@ async function plan(env, ident, hex) {
     } catch (e) { /* fall through to free sources */ }
   }
 
-  // 2) Airports from adsbdb when no filed route/coordinates are available
-  const okA = (a) => a && a.latitude !== null && a.longitude !== null;
+  // 3) Free schedule database (adsbdb). It is keyed by callsign only, so it can describe a different
+  //    leg of the same flight number. Only accept it if it agrees with where this aircraft really took off.
   if (!okA(out.origin) || !okA(out.destination)) {
     try {
-      const r = await get(`https://api.adsbdb.com/v0/callsign/${encodeURIComponent(ident)}`, 3600);
+      const r = await get(`https://api.adsbdb.com/v0/callsign/${encodeURIComponent(ident)}`, 600);
       if (r.ok) {
         const fr = ((await r.json()).response || {}).flightroute;
         if (fr && fr.origin && fr.destination) {
           const m = (a) => ({ icao: a.icao_code, iata: a.iata_code, name: a.name, city: a.municipality, latitude: num(a.latitude), longitude: num(a.longitude) });
-          out.origin = m(fr.origin); out.destination = m(fr.destination);
+          const o = m(fr.origin), d = m(fr.destination);
           out.airline = out.airline || (fr.airline && fr.airline.name) || null;
-          out.sources.airports = "adsbdb";
+          const depIcao = out.departure && out.departure.airport && out.departure.airport.icao;
+          let use = null;
+          if (depIcao) { if (o.icao === depIcao) use = [o, d]; else if (d.icao === depIcao) use = [d, o]; }
+          else if (pos && okA(o) && okA(d)) {
+            if (plausible([o.latitude, o.longitude], [d.latitude, d.longitude], pos)) use = [o, d];
+            else if (plausible([d.latitude, d.longitude], [o.latitude, o.longitude], pos)) use = [d, o];
+          } else if (!pos) use = [o, d];
+          if (use) { out.origin = use[0]; out.destination = use[1]; out.sources.airports = "adsbdb"; }
+          else out.notes.push(`The stored schedule route (${o.iata || o.icao} to ${d.iata || d.icao}) doesn't match where this aircraft actually departed, so it was ignored.`);
         }
       }
     } catch (e) { /* ignore */ }
   }
 
-  // 3) Flown path: ADS-B trace history (adsb.lol), else FlightAware track
-  if (/^[0-9a-f]{6}$/i.test(hex || "")) {
-    const h = hex.toLowerCase();
-    for (const base of ["https://globe.adsb.lol", "https://adsb.lol"]) {
-      try {
-        const r = await get(`${base}/data/traces/${h.slice(-2)}/trace_full_${h}.json`, 30);
-        if (!r.ok) continue;
-        const pts = ((await r.json()).trace || []).filter((p) => num(p[1]) !== null && num(p[2]) !== null).map((p) => [p[1], p[2]]);
-        if (pts.length > 1) { out.actual = thin(pts, 400); out.sources.actual = "adsb.lol"; break; }
-      } catch (e) { /* try next */ }
-    }
+  // 4) If we still have no origin, use the airport it really departed from
+  if (!okA(out.origin) && out.departure && out.departure.airport) {
+    out.origin = { icao: out.departure.airport.icao, iata: out.departure.airport.iata, name: out.departure.airport.name, city: null, latitude: out.departure.airport.latitude, longitude: out.departure.airport.longitude };
+    out.sources.airports = "ADS-B departure";
   }
+
   if (out.actual.length < 2 && faTrack.length > 1) { out.actual = thin(faTrack, 400); out.sources.actual = "FlightAware"; }
   return out;
 }
@@ -165,7 +219,9 @@ export default {
     if (/\/plan$/.test(p)) {
       const ident = (q.get("ident") || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 10).toUpperCase();
       if (!ident) return json({ error: "ident required" }, 400);
-      return json(await plan(env || {}, ident, q.get("hex") || ""), 200, 60);
+      const la = num(q.get("lat")), lo = num(q.get("lon")), trk = num(q.get("trk"));
+      let pos = null; if (la !== null && lo !== null) { pos = [la, lo]; pos.trk = trk; }
+      return json(await plan(env || {}, ident, q.get("hex") || "", pos), 200, 30);
     }
 
     if (/\/route$/.test(p)) {
