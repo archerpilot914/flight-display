@@ -165,6 +165,18 @@ export default {
     const u = new URL(request.url), q = u.searchParams, p = u.pathname;
     if (!p.startsWith("/api/")) return env.ASSETS.fetch(request);
 
+    if (p === "/api/airport-lookup") {
+      const code=(q.get("code")||"").trim().toUpperCase();
+      if(!/^[A-Z0-9]{3,4}$/.test(code))return json({error:"Invalid airport ID"},400);
+      try{
+        const up=await get("https://airportsapi.com/api/airports/"+encodeURIComponent(code),86400);
+        if(!up.ok)return json({error:"Airport not found"},404);
+        const j=await up.json(),lat=num(j.latitude),lon=num(j.longitude);
+        if(lat===null||lon===null||Math.abs(lat)>90||Math.abs(lon)>180)return json({error:"Airport coordinates unavailable"},404);
+        return json({code:j.code||code,name:j.name||code,lat,lon},200,86400);
+      }catch(e){return json({error:"Airport directory unavailable"},502)}
+    }
+
     if (p === "/api/photo") {
       const hex = (q.get("hex") || "").trim().toLowerCase();
       const reg = (q.get("reg") || "").trim().toUpperCase();
