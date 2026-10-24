@@ -155,7 +155,7 @@ const shrink=(f,cb)=>{const r=new FileReader();r.onload=()=>{const i=new Image()
 let tz;
 const CC={VFR:"#22c55e",MVFR:"#3b82f6",IFR:"#ec4899",LIFR:"#a855f7",NA:"#6b7280"};let cats={};
 let me={lat:cfg.lat??43.5727,lon:cfg.lon??-71.4189,gps:false}, data=[], filter="all", view="traffic", sel=null, follow=false, trailOn=false, src=0, wx=null, trails={}, mk={}, q="";
-let remoteAircraft=null,remoteFoundAt=0,searchError="",searchBusy=false,routePts=[],homeMode=true,keyboardOpen=true,airportKeyboardOpen=false,selectedWeatherAirport=null,weatherRequest=0,trafficAirport=null,airportQuery="",airportSearchError="",airportSearchBusy=false,trafficGeneration=0;
+let remoteAircraft=null,remoteFoundAt=0,searchError="",searchBusy=false,routePts=[],homeMode=true,keyboardOpen=true,airportKeyboardOpen=false,selectedWeatherAirport=null,weatherRequest=0,trafficAirport=null,airportQuery="",airportSearchError="",airportSearchBusy=false,trafficGeneration=0,remoteAirports=[],remoteCats={},airportLayerRequest=0;
 const routeCache=new Map();
 const rad=x=>x*Math.PI/180;
 const dist=(a,b,c,d)=>{const p=rad(c-a),r=rad(d-b),x=Math.sin(p/2)**2+Math.cos(rad(a))*Math.cos(rad(c))*Math.sin(r/2)**2;return 6371000*2*Math.asin(Math.sqrt(x))/NM};
@@ -198,8 +198,9 @@ function drawHome(){
 }
 function drawAps(){
  apL.clearLayers();
- AP.forEach(([id,n,la,lo])=>{
-  const cat=cats[id]||"NA",colour=CC[cat]||CC.NA;
+ const available=trafficAirport?remoteAirports.map(a=>[a.id,a.name,a.lat,a.lon]):AP;
+ available.forEach(([id,n,la,lo])=>{
+  const cat=(trafficAirport?remoteCats[id]:cats[id])||"NA",colour=CC[cat]||CC.NA;
   L.circleMarker([la,lo],{radius:9,color:"#ffffff",weight:2.5,opacity:1,fillColor:colour,fillOpacity:1,className:"airport-flight-rule-dot"
   }).bindTooltip(id+" · "+(cat==="NA"?"Weather unavailable":cat),{direction:"top"}).on("click",()=>selectWeatherAirport(id,true)).addTo(apL);
   L.marker([la,lo],{interactive:false,
@@ -210,6 +211,7 @@ function drawAps(){
 }
 function drawSmallAirports(){
  smallApL.clearLayers();
+ if(trafficAirport)return;
  if(!cfg.aps||map.getZoom()<9)return;
  const showPrivate=map.getZoom()>=11,bounds=map.getBounds().pad(.1);
  SMALL_AP.forEach(([id,name,la,lo,privateUse])=>{
@@ -562,8 +564,8 @@ function renderView(){
   updateSearchStatus();
  }else if(view==="airports"){
   if($("airportSearch")&&document.activeElement===$("airportSearch")){updateAirportSearchStatus();return}
-  const nearby=AP.concat(SMALL_AP).map(([id,n,la,lo])=>[id,n,la,lo,dist(trafficCenter().lat,trafficCenter().lon,la,lo)]).sort((a,b)=>a[4]-b[4]).slice(0,45);
-  v.innerHTML=`<div style="display:flex;flex-direction:column;gap:9px;min-height:100%"><b style="font-size:21px">Airports near radar center</b><table><tbody>${nearby.map(([id,n,la,lo,d])=>`<tr class="r" data-ap="${la},${lo}"><td><span style="color:${CC[cats[id]]||CC.NA}">●</span> <b>${esc(id)}</b></td><td>${esc(n)}</td><td>${d.toFixed(1)} NM</td></tr>`).join("")}</tbody></table><div id="airportSearchDock" style="position:sticky;bottom:-15px;background:#0a1628;padding:12px 0 6px;border-top:1px solid #38618b;display:flex;flex-direction:column;gap:7px"><b style="font-size:19px">Search another airport</b><div class="row"><input id="airportSearch" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="KJFK, KBOS, KLCI or 1P1" value="${esc(airportQuery)}" style="flex:1;min-width:0;font-size:19px;padding:12px"><button type="button" id="airportGo" style="flex:0 0 92px">Search</button></div><div class="mu" id="airportSearchStatus"></div><button id="airportKbToggle" type="button" style="width:100%">${airportKeyboardOpen?"⌨ Hide keyboard":"⌨ Show keyboard"}</button>${airportKeyboardHtml()}<div class="mu">Enter an airport ID. Home/GPS returns to your local radar.</div></div></div>`;
+  const nearby=(trafficAirport?remoteAirports.map(a=>[a.id,a.name,a.lat,a.lon]):AP.concat(SMALL_AP)).map(([id,n,la,lo])=>[id,n,la,lo,dist(trafficCenter().lat,trafficCenter().lon,la,lo)]).sort((a,b)=>a[4]-b[4]).slice(0,45);
+  v.innerHTML=`<div style="display:flex;flex-direction:column;gap:9px;min-height:100%"><b style="font-size:21px">Airports near radar center</b><table><tbody>${nearby.map(([id,n,la,lo,d])=>`<tr class="r" data-ap="${la},${lo}"><td><span style="color:${CC[(trafficAirport?remoteCats[id]:cats[id])]||CC.NA}">●</span> <b>${esc(id)}</b></td><td>${esc(n)}</td><td>${d.toFixed(1)} NM</td></tr>`).join("")}</tbody></table><div id="airportSearchDock" style="position:sticky;bottom:-15px;background:#0a1628;padding:12px 0 6px;border-top:1px solid #38618b;display:flex;flex-direction:column;gap:7px"><b style="font-size:19px">Search another airport</b><div class="row"><input id="airportSearch" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="KJFK, KBOS, KLCI or 1P1" value="${esc(airportQuery)}" style="flex:1;min-width:0;font-size:19px;padding:12px"><button type="button" id="airportGo" style="flex:0 0 92px">Search</button></div><div class="mu" id="airportSearchStatus"></div><button id="airportKbToggle" type="button" style="width:100%">${airportKeyboardOpen?"⌨ Hide keyboard":"⌨ Show keyboard"}</button>${airportKeyboardHtml()}<div class="mu">Enter an airport ID. Home/GPS returns to your local radar.</div></div></div>`;
   $("airportSearch").oninput=e=>{airportQuery=e.target.value;airportSearchError=""};
   $("airportSearch").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();searchAirport()}};
   $("airportGo").onclick=searchAirport;
@@ -600,7 +602,7 @@ $("view").addEventListener("click",e=>{
  const m=e.target.closest("[data-b]");if(m){cfg.base=m.dataset.b;save();setBase(cfg.base);drawHome();renderView()}});
 $("nav").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;view=b.dataset.v;document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("on",x===b));renderView()});
 function returnHome(){
- trafficAirport=null;trafficGeneration++;data=[];src=0;selectedWeatherAirport=null;airportSearchError="";loadWx();Object.values(mk).forEach(m=>acL.removeLayer(m));mk={};motion.clear();
+ trafficAirport=null;trafficGeneration++;remoteAirports=[];remoteCats={};airportLayerRequest++;drawAps();drawSmallAirports();data=[];src=0;selectedWeatherAirport=null;airportSearchError="";loadWx();Object.values(mk).forEach(m=>acL.removeLayer(m));mk={};motion.clear();
  homeMode=true;follow=false;trailOn=false;sel=null;routePts=[];remoteAircraft=null;remoteFoundAt=0;
  trL.clearLayers();drawHome();map.stop();map.setView([me.lat,me.lon],10);load();
  filter="all";document.querySelectorAll("#sb [data-f]").forEach(b=>b.classList.toggle("on",b.dataset.f==="all"));
@@ -635,8 +637,31 @@ async function loadCats(){
  }catch(e){console.warn("Airport flight-rule colors unavailable",e);cats={};drawAps();if(view==="airports")renderView()}
 }
 
+async function loadNearbyAirportDots(){
+ if(!trafficAirport)return;
+ const generation=trafficGeneration,request=++airportLayerRequest,center={...trafficAirport};
+ try{
+  const res=await fetch("/api/nearby-airports?lat="+encodeURIComponent(center.lat)+"&lon="+encodeURIComponent(center.lon),{signal:AbortSignal.timeout(20000)});
+  if(!res.ok)throw Error("Nearby airport lookup failed");
+  const payload=await res.json();
+  if(request!==airportLayerRequest||generation!==trafficGeneration)return;
+  const list=Array.isArray(payload.airports)?payload.airports:[];
+  remoteAirports=list.filter(a=>a&&Number.isFinite(a.lat)&&Number.isFinite(a.lon)&&a.id);
+  if(!remoteAirports.some(a=>a.id===center.id))remoteAirports.unshift({id:center.id,name:center.name,lat:center.lat,lon:center.lon});
+  remoteCats={};drawAps();if(view==="airports"&&document.activeElement!==$("airportSearch"))renderView();
+  const ids=remoteAirports.map(a=>a.id).filter(id=>/^[A-Z]{4}$/.test(id)).slice(0,60);
+  for(let k=0;k<ids.length;k+=18){
+   const r=await fetch(metarUrl(ids.slice(k,k+18).join(",")),{signal:AbortSignal.timeout(12000),cache:"no-store"});
+   if(!r.ok)continue;
+   const reports=await r.json();
+   if(request!==airportLayerRequest||generation!==trafficGeneration)return;
+   if(Array.isArray(reports))for(const m of reports)if(m&&m.icaoId)remoteCats[m.icaoId.toUpperCase()]=catOf(m);
+  }
+  if(request===airportLayerRequest&&generation===trafficGeneration){drawAps();if(view==="airports"&&document.activeElement!==$("airportSearch"))renderView()}
+ }catch(e){console.warn("Remote airport dots unavailable",e)}
+}
 function focusAirport(ap){
- trafficAirport=ap;trafficGeneration++;selectedWeatherAirport=ap.id;
+ trafficAirport=ap;trafficGeneration++;selectedWeatherAirport=ap.id;remoteAirports=[{id:ap.id,name:ap.name,lat:ap.lat,lon:ap.lon}];remoteCats={};drawAps();drawSmallAirports();loadNearbyAirportDots();
  homeMode=false;follow=false;trailOn=false;sel=null;remoteAircraft=null;remoteFoundAt=0;routePts=[];trL.clearLayers();
  data=[];src=0;Object.values(mk).forEach(m=>acL.removeLayer(m));mk={};motion.clear();
  map.stop();map.setView([ap.lat,ap.lon],10);drawHome();loadWx();load();renderSel();
@@ -665,7 +690,7 @@ async function searchAirport(){
  finally{airportSearchBusy=false;updateAirportSearchStatus()}
 }
 function selectWeatherAirport(id,center=false){
- const ap=AP.concat(SMALL_AP).find(a=>a[0]===id);if(!ap)return;
+ const ap=AP.concat(SMALL_AP).find(a=>a[0]===id)||remoteAirports.filter(a=>a.id===id).map(a=>[a.id,a.name,a.lat,a.lon])[0];if(!ap)return;
  focusAirport({id:ap[0],name:ap[1],lat:ap[2],lon:ap[3]});
 
 }
@@ -673,7 +698,7 @@ async function loadWx(){
  const request=++weatherRequest;
  const near=AP.map(a=>({id:a[0],n:a[1],lat:a[2],lon:a[3],d:dist(me.lat,me.lon,a[2],a[3])})).sort((a,b)=>a.d-b.d);
  const extra=SMALL_AP.find(a=>a[0]===selectedWeatherAirport);
- const remote=trafficAirport&&trafficAirport.id===selectedWeatherAirport?trafficAirport:null;
+ const remote=(remoteAirports.find(a=>a.id===selectedWeatherAirport)||trafficAirport&&trafficAirport.id===selectedWeatherAirport?remoteAirports.find(a=>a.id===selectedWeatherAirport)||trafficAirport:null);
  const chosen=near.find(a=>a.id===selectedWeatherAirport)||(remote?{id:remote.id,n:remote.name,lat:remote.lat,lon:remote.lon,d:dist(me.lat,me.lon,remote.lat,remote.lon)}:null)||(extra?{id:extra[0],n:extra[1],lat:extra[2],lon:extra[3],d:dist(me.lat,me.lon,extra[2],extra[3])}:null)||near[0];
  const selected=!!selectedWeatherAirport;
  const lookup=selected?[chosen]:near.slice(0,4);
