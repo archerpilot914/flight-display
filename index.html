@@ -359,7 +359,7 @@ async function updateFollowedAircraft(){
   draw();
  }catch(e){console.warn("Follow update unavailable",e)}
 }
-let busy=false;const load=async()=>{if(busy)return;busy=true;try{await loadInner();await updateFollowedAircraft()}finally{busy=false}};
+let busy=false;const load=async()=>{if(busy)return;busy=true;const generation=trafficGeneration;try{await loadInner();await updateFollowedAircraft()}finally{busy=false;if(generation!==trafficGeneration)load()}};
 let timer;const sched=()=>{clearInterval(timer);timer=setInterval(load,Math.max(10,cfg.poll)*1000)};
 // Smooth predicted movement from ADS-B groundspeed and track.
 // Positions between actual feed reports are estimates, not confirmed locations.
@@ -543,7 +543,7 @@ function renderView(){
  }else if(view==="airports"){
   if($("airportSearch")&&document.activeElement===$("airportSearch")){updateAirportSearchStatus();return}
   const nearby=AP.concat(SMALL_AP).map(([id,n,la,lo])=>[id,n,la,lo,dist(trafficCenter().lat,trafficCenter().lon,la,lo)]).sort((a,b)=>a[4]-b[4]).slice(0,45);
-  v.innerHTML=`<div style="display:flex;flex-direction:column;gap:9px"><b style="font-size:21px">Find an airport anywhere</b><div class="row"><input id="airportSearch" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="KJFK, KBOS, KLCI or 1P1" value="${esc(airportQuery)}" style="flex:1;min-width:0;font-size:19px;padding:12px"><button type="button" id="airportGo" style="flex:0 0 92px">Search</button></div><div class="mu" id="airportSearchStatus"></div><div class="mu">Search by ICAO, IATA, or FAA airport ID. Selecting an airport moves the radar and refreshes local ADS-B traffic. Home/GPS restores your original coverage.</div><b>Airports near radar center</b><table><tbody>${nearby.map(([id,n,la,lo,d])=>`<tr class="r" data-ap="${la},${lo}"><td><span style="color:${CC[cats[id]]||CC.NA}">●</span> <b>${esc(id)}</b></td><td>${esc(n)}</td><td>${d.toFixed(1)} NM</td></tr>`).join("")}</tbody></table></div>`;
+  v.innerHTML=`<div style="display:flex;flex-direction:column;gap:9px;min-height:100%"><b style="font-size:21px">Airports near radar center</b><table><tbody>${nearby.map(([id,n,la,lo,d])=>`<tr class="r" data-ap="${la},${lo}"><td><span style="color:${CC[cats[id]]||CC.NA}">●</span> <b>${esc(id)}</b></td><td>${esc(n)}</td><td>${d.toFixed(1)} NM</td></tr>`).join("")}</tbody></table><div id="airportSearchDock" style="position:sticky;bottom:-15px;background:#0a1628;padding:12px 0 6px;border-top:1px solid #38618b;display:flex;flex-direction:column;gap:7px"><b style="font-size:19px">Search another airport</b><div class="row"><input id="airportSearch" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="KJFK, KBOS, KLCI or 1P1" value="${esc(airportQuery)}" style="flex:1;min-width:0;font-size:19px;padding:12px"><button type="button" id="airportGo" style="flex:0 0 92px">Search</button></div><div class="mu" id="airportSearchStatus"></div><div class="mu">Enter an airport ID. Home/GPS returns to your local radar.</div></div></div>`;
   $("airportSearch").oninput=e=>{airportQuery=e.target.value;airportSearchError=""};
   $("airportSearch").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();searchAirport()}};
   $("airportGo").onclick=searchAirport;
@@ -577,7 +577,7 @@ $("view").addEventListener("click",e=>{
  const m=e.target.closest("[data-b]");if(m){cfg.base=m.dataset.b;save();setBase(cfg.base);drawHome();renderView()}});
 $("nav").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;view=b.dataset.v;document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("on",x===b));renderView()});
 function returnHome(){
- trafficAirport=null;trafficGeneration++;data=[];src=0;selectedWeatherAirport=null;airportSearchError="";loadWx();
+ trafficAirport=null;trafficGeneration++;data=[];src=0;selectedWeatherAirport=null;airportSearchError="";loadWx();Object.values(mk).forEach(m=>acL.removeLayer(m));mk={};motion.clear();
  homeMode=true;follow=false;trailOn=false;sel=null;routePts=[];remoteAircraft=null;remoteFoundAt=0;
  trL.clearLayers();drawHome();map.stop();map.setView([me.lat,me.lon],10);load();
  filter="all";document.querySelectorAll("#sb [data-f]").forEach(b=>b.classList.toggle("on",b.dataset.f==="all"));
@@ -616,7 +616,8 @@ function focusAirport(ap){
  trafficAirport=ap;trafficGeneration++;selectedWeatherAirport=ap.id;
  homeMode=false;follow=false;trailOn=false;sel=null;remoteAircraft=null;remoteFoundAt=0;routePts=[];trL.clearLayers();
  data=[];src=0;Object.values(mk).forEach(m=>acL.removeLayer(m));mk={};motion.clear();
- map.stop();map.setView([ap.lat,ap.lon],10);drawHome();loadWx();load();renderSel();renderView();
+ map.stop();map.setView([ap.lat,ap.lon],10);drawHome();loadWx();load();renderSel();
+ view="airports";document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("on",b.dataset.v==="airports"));renderView();
 }
 function updateAirportSearchStatus(){
  const el=$("airportSearchStatus");if(el)el.textContent=airportSearchError||(trafficAirport?"Viewing traffic around "+trafficAirport.id+" — "+trafficAirport.name:"Viewing traffic near GPS location");
