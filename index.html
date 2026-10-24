@@ -19,7 +19,7 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--tx);font:16px sy
 #mapw{position:relative;overflow:hidden}#map{position:absolute;inset:0;background:#0a1626}
 #sb{position:absolute;left:8px;top:8px;z-index:900;display:flex;flex-direction:column;gap:6px}
 #sb button{width:70px;padding:8px 2px;font-size:12px;background:#0a1628e6;border:1px solid var(--ln);color:var(--tx);border-radius:8px}
-#sb button i{display:block;font-style:normal;font-size:22px}#sb button[data-f="heli"] i svg{width:22px;height:22px;display:block;margin:0 auto}#homeBtn{position:absolute;right:52px;bottom:16px;z-index:1000;width:52px;height:52px;padding:0;border:2px solid #489dff;border-radius:12px;background:#0a2348f2;box-shadow:0 2px 10px #0008;display:flex;align-items:center;justify-content:center;cursor:pointer}
+#sb button i{display:block;font-style:normal;font-size:22px}#sb button[data-f="heli"] i svg{width:22px;height:22px;display:block;margin:0 auto;transform:rotate(90deg)}#homeBtn{position:absolute;right:52px;bottom:16px;z-index:1000;width:52px;height:52px;padding:0;border:2px solid #489dff;border-radius:12px;background:#0a2348f2;box-shadow:0 2px 10px #0008;display:flex;align-items:center;justify-content:center;cursor:pointer}
 #homeBtn svg{width:30px;height:34px;display:block;transform:translate(-1px,-1px)}#homeBtn:hover,#homeBtn:focus-visible{background:#174477;outline:2px solid #8bc9ff;outline-offset:2px}#sb button.on{border-color:var(--ac);background:#12305c}
 #wx{position:absolute;right:8px;top:8px;z-index:900;background:#0a1628e6;border:1px solid var(--ln);border-radius:8px;padding:7px 11px;font-size:13px;max-width:60%}
 #right{display:flex;flex-direction:column;gap:6px;min-height:0}
@@ -109,7 +109,7 @@ const shrink=(f,cb)=>{const r=new FileReader();r.onload=()=>{const i=new Image()
 let tz;
 const CC={VFR:"#22c55e",MVFR:"#3b82f6",IFR:"#ec4899",LIFR:"#a855f7",NA:"#6b7280"};let cats={};
 let me={lat:cfg.lat??43.5727,lon:cfg.lon??-71.4189,gps:false}, data=[], filter="all", view="traffic", sel=null, follow=false, trailOn=false, src=0, wx=null, trails={}, mk={}, q="";
-let remoteAircraft=null,remoteFoundAt=0,searchError="",searchBusy=false,routePts=[],homeMode=true,keyboardOpen=true;
+let remoteAircraft=null,remoteFoundAt=0,searchError="",searchBusy=false,routePts=[],homeMode=true,keyboardOpen=true,selectedWeatherAirport=null,weatherRequest=0;
 const routeCache=new Map();
 const rad=x=>x*Math.PI/180;
 const dist=(a,b,c,d)=>{const p=rad(c-a),r=rad(d-b),x=Math.sin(p/2)**2+Math.cos(rad(a))*Math.cos(rad(c))*Math.sin(r/2)**2;return 6371000*2*Math.asin(Math.sqrt(x))/NM};
@@ -153,7 +153,7 @@ function drawAps(){
  AP.forEach(([id,n,la,lo])=>{
   const cat=cats[id]||"NA",colour=CC[cat]||CC.NA;
   L.circleMarker([la,lo],{radius:9,color:"#ffffff",weight:2.5,opacity:1,fillColor:colour,fillOpacity:1,className:"airport-flight-rule-dot"
-  }).bindTooltip(id+" · "+(cat==="NA"?"Weather unavailable":cat),{direction:"top"}).on("click",()=>map.setView([la,lo],11)).addTo(apL);
+  }).bindTooltip(id+" · "+(cat==="NA"?"Weather unavailable":cat),{direction:"top"}).on("click",()=>selectWeatherAirport(id,true)).addTo(apL);
   L.marker([la,lo],{interactive:false,
    icon:L.divIcon({className:"airport-label-marker",iconSize:[0,0],
     html:`<div class="airport-label"><b>${id}</b> <small style="color:${colour}">${cat==="NA"?"":cat}</small></div>`})
@@ -509,11 +509,12 @@ function renderView(){
  }
 }
 $("view").addEventListener("click",e=>{
- const r=e.target.closest("tr.r");if(r){if(r.dataset.h)pick(r.dataset.h);else if(r.dataset.ap)map.setView(r.dataset.ap.split(",").map(Number),11)}
+ const r=e.target.closest("tr.r");if(r){if(r.dataset.h)pick(r.dataset.h);else if(r.dataset.ap){const coords=r.dataset.ap.split(",").map(Number),airport=AP.find(a=>a[2]===coords[0]&&a[3]===coords[1]);if(airport)selectWeatherAirport(airport[0],true)}}
  const b=e.target.closest("[data-l]");if(b){cfg[b.dataset.l]=!cfg[b.dataset.l];save();layers();renderView()}
  const m=e.target.closest("[data-b]");if(m){cfg.base=m.dataset.b;save();setBase(cfg.base);drawHome();renderView()}});
 $("nav").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;view=b.dataset.v;document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("on",x===b));renderView()});
 function returnHome(){
+ selectedWeatherAirport=null;loadWx();
  homeMode=true;follow=false;trailOn=false;sel=null;routePts=[];remoteAircraft=null;remoteFoundAt=0;
  trL.clearLayers();map.stop();map.setView([me.lat,me.lon],10);
  filter="all";document.querySelectorAll("#sb [data-f]").forEach(b=>b.classList.toggle("on",b.dataset.f==="all"));
@@ -547,26 +548,55 @@ async function loadCats(){
   cats=c;drawAps();if(view==="airports")renderView();
  }catch(e){console.warn("Airport flight-rule colors unavailable",e);cats={};drawAps();if(view==="airports")renderView()}
 }
+
+function selectWeatherAirport(id,center=false){
+ const ap=AP.find(a=>a[0]===id);if(!ap)return;
+ selectedWeatherAirport=id;
+ if(center){homeMode=false;map.setView([ap[2],ap[3]],11)}
+ loadWx();
+}
 async function loadWx(){
- const near=AP.map(a=>({id:a[0],n:a[1],d:dist(me.lat,me.lon,a[2],a[3])})).sort((a,b)=>a.d-b.d);
- $("loc").textContent=near[0].id;$("locn").textContent=near[0].n+" • "+near[0].d.toFixed(1)+" NM";
+ const request=++weatherRequest;
+ const near=AP.map(a=>({id:a[0],n:a[1],lat:a[2],lon:a[3],d:dist(me.lat,me.lon,a[2],a[3])})).sort((a,b)=>a.d-b.d);
+ const chosen=near.find(a=>a.id===selectedWeatherAirport)||near[0];
+ const selected=!!selectedWeatherAirport;
+ const lookup=selected?[chosen]:near.slice(0,4);
+ $("loc").textContent=chosen.id;
+ $("locn").textContent=chosen.n+" • "+chosen.d.toFixed(1)+" NM"+(selected?" • Selected":"");
+ $("tmp").textContent="—°F";$("cnd").textContent="Weather loading…";
+ let result;
  try{
-  const r=await fetch(metarUrl(near.slice(0,4).map(x=>x.id).join(",")));
-  const j=await r.json(),m=near.map(n=>j.find(x=>x.icaoId===n.id)).find(Boolean);
-  if(!m)throw 0;
-  const cv=m.clouds&&m.clouds.length?m.clouds.map(c=>c.cover).includes("OVC")?"OVC":m.clouds.map(c=>c.cover).includes("BKN")?"BKN":m.clouds.map(c=>c.cover).includes("SCT")?"SCT":"FEW":"CLR";
-  wx={src:"METAR (aviationweather.gov)",id:m.icaoId,name:m.name,temp:F(m.temp),dew:m.dewp!=null?F(m.dewp):null,wind:(m.wdir==="VRB"?"VRB":m.wdir+"°")+" @ "+m.wspd+" kt"+(m.wgst?" G"+m.wgst:""),wdir:m.wdir,wspd:m.wspd,vis:String(m.visib),alt:(m.altim*0.02953).toFixed(2),clouds:(m.clouds||[]).map(c=>c.cover+(c.base?String(Math.round(c.base/100)).padStart(3,"0"):"")).join(" "),raw:m.rawOb,cond:cvTxt[cv],icon:cvIc[cv],time:new Date(m.obsTime*1000).toUTCString().slice(17,22)+"Z"};
+  const r=await fetch(metarUrl(lookup.map(x=>x.id).join(",")),{cache:"no-store"});
+  if(!r.ok)throw Error("METAR unavailable");
+  const j=await r.json();
+  const m=lookup.map(n=>j.find(x=>x.icaoId===n.id)).find(Boolean);
+  if(!m)throw Error("No METAR for airport");
+  const clouds=(m.clouds||[]).map(c=>c.cover);
+  const cv=clouds.includes("OVC")?"OVC":clouds.includes("BKN")?"BKN":clouds.includes("SCT")?"SCT":clouds.includes("FEW")?"FEW":"CLR";
+  result={src:"METAR (aviationweather.gov)",id:m.icaoId,name:m.name||chosen.n,temp:F(m.temp),dew:m.dewp!=null?F(m.dewp):null,wind:(m.wdir==="VRB"?"VRB":m.wdir+"°")+" @ "+m.wspd+" kt"+(m.wgst?" G"+m.wgst:""),wdir:m.wdir,wspd:m.wspd,vis:String(m.visib),alt:(m.altim*0.02953).toFixed(2),clouds:(m.clouds||[]).map(c=>c.cover+(c.base?String(Math.round(c.base/100)).padStart(3,"0"):"")).join(" "),raw:m.rawOb,cond:cvTxt[cv],icon:cvIc[cv],time:m.obsTime?new Date(m.obsTime*1000).toUTCString().slice(17,22)+"Z":""};
  }catch(e){
-  try{
-   const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${me.lat}&longitude=${me.lon}&current=temperature_2m,wind_speed_10m,wind_direction_10m,pressure_msl,cloud_cover,visibility&temperature_unit=fahrenheit&wind_speed_unit=kn`);
-   const c=(await r.json()).current,cc=c.cloud_cover,k=cc<15?"CLR":cc<35?"FEW":cc<60?"SCT":cc<85?"BKN":"OVC";
-   wx={src:"Open-Meteo model data (METAR unavailable)",id:near[0].id,name:near[0].n,temp:Math.round(c.temperature_2m),dew:null,wind:Math.round(c.wind_direction_10m)+"° @ "+Math.round(c.wind_speed_10m)+" kt",wdir:Math.round(c.wind_direction_10m),wspd:Math.round(c.wind_speed_10m),vis:Math.min(10,Math.round(c.visibility/1609.34)),alt:(c.pressure_msl*0.02953).toFixed(2),clouds:cc+"% cover",raw:"",cond:cvTxt[k],icon:cvIc[k]};
-  }catch(e2){wx=null;$("cnd").textContent="Weather unavailable";return}
+  if(selected){
+   // Never substitute GPS-local conditions for the chosen airport.
+   result={src:"METAR unavailable",id:chosen.id,name:chosen.n,temp:"—",dew:null,wind:"—",vis:"—",alt:"—",clouds:"No METAR available for selected airport",raw:"",cond:"Unavailable",icon:"",time:""};
+  }else{
+   try{
+    const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${me.lat}&longitude=${me.lon}&current=temperature_2m,wind_speed_10m,wind_direction_10m,pressure_msl,cloud_cover,visibility&temperature_unit=fahrenheit&wind_speed_unit=kn`);
+    if(!r.ok)throw Error("Forecast unavailable");
+    const c=(await r.json()).current,cc=c.cloud_cover,k=cc<15?"CLR":cc<35?"FEW":cc<60?"SCT":cc<85?"BKN":"OVC";
+    result={src:"Open-Meteo model data (METAR unavailable)",id:chosen.id,name:chosen.n,temp:Math.round(c.temperature_2m),dew:null,wind:Math.round(c.wind_direction_10m)+"° @ "+Math.round(c.wind_speed_10m)+" kt",wdir:Math.round(c.wind_direction_10m),wspd:Math.round(c.wind_speed_10m),vis:Math.min(10,Math.round(c.visibility/1609.34)),alt:(c.pressure_msl*0.02953).toFixed(2),clouds:cc+"% cover",raw:"",cond:cvTxt[k],icon:cvIc[k]};
+   }catch(e2){
+    result={src:"Weather unavailable",id:chosen.id,name:chosen.n,temp:"—",dew:null,wind:"—",vis:"—",alt:"—",clouds:"Weather unavailable",raw:"",cond:"Unavailable",icon:"",time:""};
+   }
+  }
  }
- const ap=AP.find(a=>a[0]===wx.id);wx.dist=ap?dist(me.lat,me.lon,ap[2],ap[3]).toFixed(1):"—";$("loc").textContent=wx.id;$("locn").textContent=(ap?ap[1]:wx.id)+" • "+wx.dist+" NM";
- $("tmp").textContent=wx.temp+"°F";$("cnd").textContent=wx.icon+" "+wx.cond;
- $("wnd").textContent="Wind "+wx.wind;$("vis").textContent=`Vis ${wx.vis} SM • Alt ${wx.alt} inHg`;
- $("wx").innerHTML=`<b>${wx.id}</b> (${wx.dist} NM) ${wx.icon} ${wx.temp}°F • ${wx.wind} • ${wx.vis} SM • ${wx.alt}<br><span class="mu">${esc(wx.clouds||"")}${wx.time?" • "+wx.time:""}</span>`;
+ if(request!==weatherRequest)return;
+ wx=result;
+ wx.dist=chosen.d.toFixed(1);
+ $("loc").textContent=wx.id;
+ $("locn").textContent=chosen.n+" • "+wx.dist+" NM"+(selected?" • Selected":"");
+ $("tmp").textContent=wx.temp+"°F";$("cnd").textContent=(wx.icon?wx.icon+" ":"")+wx.cond;
+ $("wnd").textContent="Wind "+wx.wind;$("vis").textContent="Vis "+wx.vis+" SM • Alt "+wx.alt+" inHg";
+ $("wx").innerHTML=`<b>${esc(wx.id)}</b> (${wx.dist} NM) ${wx.icon} ${wx.temp}°F • ${esc(wx.wind)} • ${esc(wx.vis)} SM • ${esc(wx.alt)}<br><span class="mu">${esc(wx.clouds||"")}${wx.time?" • "+esc(wx.time):""}</span>`;
  if(view==="weather")renderView();
 }
 
