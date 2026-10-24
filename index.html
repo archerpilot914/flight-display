@@ -172,6 +172,11 @@ const HELICOPTER='<path d="M10.2 2.2Q12 .7 13.8 2.2L15.2 4.5L15.2 12Q15.2 15 13.
 
 // ---------- map ----------
 const map=L.map("map",{zoomControl:false,attributionControl:true}).setView([me.lat,me.lon],10);
+const RADAR_RADIUS_NM=12;
+function centerRadar(la,lo){
+ const d=RADAR_RADIUS_NM/60,cos=Math.max(.2,Math.cos(la*Math.PI/180));
+ map.fitBounds([[la-d,lo-d/cos],[la+d,lo+d/cos]],{padding:[12,12],animate:false,maxZoom:14});
+}
 L.control.zoom({position:"bottomright"}).addTo(map);
 const ES="https://server.arcgisonline.com/ArcGIS/rest/services/",BASES={topo:"World_Topo_Map",street:"World_Street_Map",sat:"World_Imagery",vfr:"World_Topo_Map",tac:"World_Topo_Map",ifrl:"World_Topo_Map",ifrh:"World_Topo_Map"};
 const ATTR='Tiles © Esri • Aircraft: <a href="https://adsb.lol">adsb.lol</a> (ODbL) / <a href="https://adsb.fi">adsb.fi</a> / <a href="https://adsb.one">adsb.one</a> • Routes: FlightAware / adsbdb • Not for navigation';
@@ -224,7 +229,7 @@ function drawSmallAirports(){
 }
 map.on("zoomend moveend",drawSmallAirports);
 function layers(){const s=(l,on)=>on?l.addTo(map):map.removeLayer(l);s(ringL,cfg.rings);s(apL,cfg.aps);s(smallApL,cfg.aps);s(radar,cfg.radar);drawSmallAirports()}
-drawHome();drawAps();layers();
+drawHome();drawAps();layers();map.whenReady(()=>centerRadar(me.lat,me.lon));
 
 // ---------- filed route + flown path ----------
 // /api/plan returns: origin/destination, filed [[lat,lon,name]...] (FlightAware key needed), actual [[lat,lon]...] (ADS-B history).
@@ -277,18 +282,41 @@ function airportSummary(a){
 }
 function routeDetails(a){
  const cs=routeKey(a),r=routeCache.get(cs),m='<div class="mu" style="margin-top:8px">';
- if(!cs)return m+'No callsign or registration to look up a route.</div>';
- if(!r)return m+'Select Show Route to load the filed route and flown path.</div>';
- if(r.status==="loading")return m+'Loading filed route and flown path…</div>';
- if(r.status==="error")return m+'Route lookup unavailable.</div>';
- if(r.status!=="ok")return m+'No route data found for this flight.</div>';
- const i=r.info,S=i.sources||{},code=p=>p&&(p.iata||p.icao||"");
- const how=filedKind(i)?"Filed route ("+(S.filed||"FlightAware")+")":S.airports==="ADS-B departure"?"Departure detected from ADS-B history. The destination needs filed-plan data (add a FlightAware key).":S.airports?"Schedule database ("+S.airports+"), checked against this aircraft's real departure":"No route data found.";
- const dep=i.departure&&i.departure.time?" • Departed "+new Date(i.departure.time*1000).toUTCString().slice(17,22)+"Z":"";
- return '<div style="margin-top:8px"><b>'+esc(code(i.origin)||"?")+' → '+esc(code(i.destination)||"?")+'</b>'+(i.airline?' <span class="mu">'+esc(i.airline)+'</span>':'')+'<span class="mu">'+esc(dep)+'</span>'+
-  '<div class="mu">'+esc(how)+(i.route?': '+esc(String(i.route).slice(0,150)):'')+'</div>'+
-  (i.notes&&i.notes.length?'<div class="mu">'+esc(i.notes.join(" "))+'</div>':'')+
-  '<div class="mu">'+(filedKind(i)?'Pink dashed = filed route • ':(code(i.destination)?'Pink dashed = great-circle estimate • ':''))+'Blue = flown path'+(S.actual?' ('+esc(S.actual)+')':' (recorded since you opened this page)')+'</div></div>';
+ if(!cs)return m+'No callsign or registration available to look up a route.</div>';
+ if(!r)return m+'Choose Show Route to look for filed waypoints and recorded ADS-B history.</div>';
+ if(r.status==="loading")return m+'Checking filed route and recorded flight path…</div>';
+ if(r.status==="error")return m+'Route lookup temporarily unavailable.</div>';
+ if(r.status!=="ok")return m+'No verified route available for this aircraft. Actual ADS-B track may still appear after monitoring.</div>';
+ const info=r.info,S=info.sources||{},code=p=>p&&(p.iata||p.icao||"");
+ const valid=routeMatchesAircraft(a,info);
+ const filed=filedKind(info),dep=info.departure&&info.departure.time?" • Departed "+new Date(info.departure.time*1000).toUTCString().slice(17,22)+"Z":"";
+ let section="";
+ if(filed){
+  const points=info.filed.map(p=>p[2]).filter(Boolean);
+  const fa=Number(info.filedAltitude),speed=Number(info.filedAirspeed);
+  const detail=(Number.isFinite(fa)&&fa>0?" • Filed altitude "+(fa<=600?"FL"+fa:Math.round(fa)+" ft"):"")+(Number.isFinite(speed)&&speed>0?" • Filed airspeed "+Math.round(speed)+" kt":"");
+  section='<div style="margin-top:7px;padding:9px;border:1px solid var(--ln);border-radius:8px;max-height:170px;overflow:auto"><b>Filed flight plan</b><div class="mu">'+esc(S.filed||"FlightAware")+esc(detail)+'</div>'+
+   (info.route?'<div style="overflow-wrap:anywhere">'+esc(String(info.route).slice(0,500))+'</div>':'')+
+   (points.length?'<div class="mu">Waypoints: '+esc(points.join(" → ").slice(0,650))+'</div>':'')+'</div>';
+ }else{
+  section='<div class="mu" style="margin-top:6px">No filed waypoints available. Detailed filed flight plans require FlightAware AeroAPI access; other route information is inferred or sourced from public schedules.</div>';
+ }
+ if(!valid)section+='<div class="mu">The reported origin/destination does not agree with this aircraft’s position, so the estimated route was withheld.</div>';
+ const type=filed?"Filed route":S.airports==="ADS-B departure"?"Departure detected from ADS-B history":S.airports?"Schedule match checked against ADS-B departure":"Route unconfirmed";
+ const origin=valid?code(info.origin)||"?":"?",destination=valid?code(info.destination)||"?":"?";
+ return '<div style="margin-top:8px"><b>'+esc(origin)+' → '+esc(destination)+'</b>'+(info.airline?' <span class="mu">'+esc(info.airline)+'</span>':'')+'<span class="mu">'+esc(dep)+'</span></div>'+
+   '<div class="mu">'+esc(type)+'</div>'+section+
+   (info.notes&&info.notes.length?'<div class="mu">'+esc(info.notes.join(" "))+'</div>':'')+
+   '<div class="mu" style="margin-top:5px">'+(filed?'Pink dashed: filed route • ':(valid&&info.origin&&info.destination?'Pink dashed: direct estimate • ':''))+'Blue: observed ADS-B path'+(S.actual?' ('+esc(S.actual)+')':'')+'</div>';
+}
+function routeMatchesAircraft(a,info){
+ if(!info||!info.origin||!info.destination)return true;
+ if(filedKind(info))return true; // Filed flight plan is identified separately from free schedules.
+ const pos=[Number(a.lat),Number(a.lon)],from=[Number(info.origin.latitude),Number(info.origin.longitude)],to=[Number(info.destination.latitude),Number(info.destination.longitude)];
+ if(!pos.every(Number.isFinite)||!from.every(Number.isFinite)||!to.every(Number.isFinite))return true;
+ const df=dist(pos[0],pos[1],from[0],from[1]),dt=dist(pos[0],pos[1],to[0],to[1]),leg=dist(from[0],from[1],to[0],to[1]);
+ // Only reject clearly unrelated routes; do not reject modest diversions or arrivals.
+ return Math.min(df,dt)<=Math.max(130,leg*.65);
 }
 function gcLine(o,d){
  const line=[],segments=60,radian=Math.PI/180,p1=o[0]*radian,l1=o[1]*radian,p2=d[0]*radian,l2=d[1]*radian;
@@ -303,7 +331,7 @@ function gcLine(o,d){
  return line;
 }
 function drawFlightPlan(a){
- const e=routeCache.get(routeKey(a)),info=e&&e.info,pts=[];
+ const e=routeCache.get(routeKey(a)),info0=e&&e.info,info=routeMatchesAircraft(a,info0)?info0:(info0?{...info0,origin:null,destination:null,filed:[]}:null),pts=[];
  const okp=p=>p&&Number.isFinite(Number(p.latitude))&&Number.isFinite(Number(p.longitude));
  let actual=[];
  if(info){
@@ -604,7 +632,7 @@ $("nav").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)r
 function returnHome(){
  trafficAirport=null;trafficGeneration++;remoteAirports=[];remoteCats={};airportLayerRequest++;drawAps();drawSmallAirports();data=[];src=0;selectedWeatherAirport=null;airportSearchError="";loadWx();Object.values(mk).forEach(m=>acL.removeLayer(m));mk={};motion.clear();
  homeMode=true;follow=false;trailOn=false;sel=null;routePts=[];remoteAircraft=null;remoteFoundAt=0;
- trL.clearLayers();drawHome();map.stop();map.setView([me.lat,me.lon],10);load();
+ trL.clearLayers();drawHome();map.stop();centerRadar(me.lat,me.lon);load();
  filter="all";document.querySelectorAll("#sb [data-f]").forEach(b=>b.classList.toggle("on",b.dataset.f==="all"));
  view="traffic";document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("on",b.dataset.v==="traffic"));
  draw();
@@ -664,7 +692,7 @@ function focusAirport(ap){
  trafficAirport=ap;trafficGeneration++;selectedWeatherAirport=ap.id;remoteAirports=[{id:ap.id,name:ap.name,lat:ap.lat,lon:ap.lon}];remoteCats={};drawAps();drawSmallAirports();loadNearbyAirportDots();
  homeMode=false;follow=false;trailOn=false;sel=null;remoteAircraft=null;remoteFoundAt=0;routePts=[];trL.clearLayers();
  data=[];src=0;Object.values(mk).forEach(m=>acL.removeLayer(m));mk={};motion.clear();
- map.stop();map.setView([ap.lat,ap.lon],10);drawHome();loadWx();load();renderSel();
+ map.stop();centerRadar(ap.lat,ap.lon);drawHome();loadWx();load();renderSel();
  view="airports";document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("on",b.dataset.v==="airports"));renderView();
 }
 function updateAirportSearchStatus(){
@@ -744,7 +772,7 @@ async function loadWx(){
 // ---------- GPS, clock, status ----------
 async function loadTz(){try{const j=await(await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${me.lat}&longitude=${me.lon}&current=temperature_2m&timezone=auto`)).json();new Intl.DateTimeFormat([],{timeZone:j.timezone});tz=j.timezone;tick()}catch(e){}}
 let gw=null,first=true;
-function setMe(la,lo,gps){me={lat:la,lon:lo,gps};drawHome();if(homeMode)map.setView([la,lo],map.getZoom());if(!trafficAirport)load();loadWx();loadTz();$("sG").className=gps?"ok":"mu";$("sG").textContent=gps?"Fix":"Manual"}
+function setMe(la,lo,gps){me={lat:la,lon:lo,gps};drawHome();if(homeMode)centerRadar(la,lo);if(!trafficAirport)load();loadWx();loadTz();$("sG").className=gps?"ok":"mu";$("sG").textContent=gps?"Fix":"Manual"}
 if(navigator.geolocation&&cfg.lat==null){
  gw=navigator.geolocation.watchPosition(p=>{
   const moved=dist(me.lat,me.lon,p.coords.latitude,p.coords.longitude)>0.5;
