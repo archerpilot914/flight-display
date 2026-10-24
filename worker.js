@@ -117,6 +117,7 @@ async function plan(env, ident, hex, pos) {
           out.airline = f.operator || null;
           out.route = f.route || "";
           out.filed = fixes.map((x) => [num(x.latitude), num(x.longitude), x.name || ""]);
+          out.filedAltitude = num(f.filed_altitude); out.filedAirspeed = num(f.filed_airspeed);
           if (out.filed.length > 1) out.sources.filed = "FlightAware";
           if (tr.ok) faTrack = ((await tr.json()).positions || []).map((p) => [num(p.latitude), num(p.longitude)]).filter((p) => p[0] !== null && p[1] !== null);
         }
