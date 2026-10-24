@@ -117,6 +117,7 @@ async function plan(env, ident, hex, pos) {
           out.airline = f.operator || null;
           out.route = f.route || "";
           out.filed = fixes.map((x) => [num(x.latitude), num(x.longitude), x.name || ""]);
+          out.filedAltitude = num(f.filed_altitude); out.filedAirspeed = num(f.filed_airspeed);
           if (out.filed.length > 1) out.sources.filed = "FlightAware";
           if (tr.ok) faTrack = ((await tr.json()).positions || []).map((p) => [num(p.latitude), num(p.longitude)]).filter((p) => p[0] !== null && p[1] !== null);
         }
@@ -164,6 +165,120 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { headers: CORS });
     const u = new URL(request.url), q = u.searchParams, p = u.pathname;
     if (!p.startsWith("/api/")) return env.ASSETS.fetch(request);
+
+    if (p === "/api/nearby-airports") {
+      const lat=num(q.get("lat")),lon=num(q.get("lon"));
+      if(lat===null||lon===null||Math.abs(lat)>90||Math.abs(lon)>180)return json({error:"Invalid center"},400);
+      const rad=Math.PI/180;
+      const distance=(a,b)=>{
+        const dl=(b[1]-a[1])*rad,dp=(b[0]-a[0])*rad;
+        const x=Math.sin(dp/2)**2+Math.cos(a[0]*rad)*Math.cos(b[0]*rad)*Math.sin(dl/2)**2;
+        return 3440.065*2*Math.asin(Math.min(1,Math.sqrt(x)));
+      };
+      const csvRow=line=>{
+        const result=[];let v="",quote=false;
+        for(let i=0;i<line.length;i++){const c=line[i];if(c==='"'){if(quote&&line[i+1]==='"'){v+='"';i++}else quote=!quote}
+          else if(c===","&&!quote){result.push(v);v=""}else v+=c}
+        result.push(v);return result;
+      };
+      try{
+        const result=await get("https://davidmegginson.github.io/ourairports-data/airports.csv",86400);
+        if(!result.ok)throw Error("Directory HTTP "+result.status);
+        const rows=(await result.text()).split(/\r?\n/),headers=csvRow(rows.shift()),index=n=>headers.indexOf(n);
+        const col={id:index("ident"),gps:index("gps_code"),icao:index("icao_code"),name:index("name"),lat:index("latitude_deg"),lon:index("longitude_deg"),type:index("type"),continent:index("continent")};
+        if(Object.values(col).some(i=>i<0))throw Error("Directory schema changed");
+        const airports=[];
+        for(const row of rows){
+          if(!row||!row.includes(",NA,")&&row.indexOf("NA")<0)continue;
+          const r=csvRow(row),type=r[col.type];
+          if(r[col.continent]!=="NA"||!["large_airport","medium_airport","small_airport","seaplane_base"].includes(type))continue;
+          const la=num(r[col.lat]),lo=num(r[col.lon]);
+          if(la===null||lo===null||Math.abs(la-lat)>1.45||Math.abs(lo-lon)>2.1)continue;
+          const nm=distance([lat,lon],[la,lo]);
+          if(nm>75)continue;
+          const id=(r[col.icao]||r[col.gps]||r[col.id]||"").toUpperCase();
+          if(!/^[A-Z0-9]{3,7}$/.test(id))continue;
+          airports.push({id,name:r[col.name]||id,lat:la,lon:lo,nm,type});
+        }
+        airports.sort((a,b)=>a.nm-b.nm);
+        const dedup=new Set(),answer=[];
+        for(const item of airports){
+          if(dedup.has(item.id))continue;
+          dedup.add(item.id);answer.push(item);
+          if(answer.length===100)break;
+        }
+        return json({airports:answer,source:"OurAirports"},200,300);
+      }catch(e){return json({error:"Nearby airport directory unavailable"},502)}
+    }
+
+    if (p === "/api/airport-lookup") {
+      const code=(q.get("code")||"").trim().toUpperCase();
+      if(!/^[A-Z0-9]{3,4}$/.test(code))return json({error:"Enter a valid 3- or 4-character airport identifier."},400);
+      const parseAirport=a=>{
+        if(!a||typeof a!=="object")return null;
+        const lat=num(a.lat??a.latitude??a.latitude_deg??a.lat_deg);
+        const lon=num(a.lon??a.longitude??a.longitude_deg??a.lon_deg);
+        if(lat===null||lon===null||Math.abs(lat)>90||Math.abs(lon)>180)return null;
+        return {code:String(a.icaoId||a.icao_code||a.gps_code||a.code||a.ident||code).toUpperCase(),name:String(a.name||a.site||code),lat,lon};
+      };
+      // First use the dedicated airport endpoint. It does not cover all GA/private fields.
+      try {
+        const up=await get("https://aviationweather.gov/api/data/airport?ids="+encodeURIComponent(code)+"&format=json",3600);
+        if(up.ok){
+          const payload=await up.json();
+          const rows=Array.isArray(payload)?payload:[payload];
+          const match=rows.find(a=>[a?.icaoId,a?.iataId,a?.ident,a?.id].some(v=>String(v||"").toUpperCase()===code));
+          const airport=parseAirport(match);
+          if(airport)return json(airport,200,3600);
+        }
+      }catch(e){ /* continue to comprehensive directory */ }
+
+      // OurAirports is a daily refreshed open directory. Includes ICAO, IATA and local
+      // identifiers for US, Canada, Mexico, Central America and the Caribbean.
+      try {
+        const csv=await get("https://davidmegginson.github.io/ourairports-data/airports.csv",86400);
+        if(!csv.ok)throw Error("Airport directory HTTP "+csv.status);
+        const body=await csv.text();
+        const lines=body.split(/\r?\n/);
+        const parseCSV=line=>{
+          const fields=[];let current="",quoted=false;
+          for(let n=0;n<line.length;n++){
+            const ch=line[n];
+            if(ch==='"'){if(quoted&&line[n+1]==='"'){current+='"';n++}else quoted=!quoted}
+            else if(ch===","&&!quoted){fields.push(current);current=""}
+            else current+=ch;
+          }
+          fields.push(current);return fields;
+        };
+        const h=parseCSV(lines[0]),at=name=>h.indexOf(name);
+        const ix={ident:at("ident"),icao:at("icao_code"),gps:at("gps_code"),local:at("local_code"),iata:at("iata_code"),lat:at("latitude_deg"),lon:at("longitude_deg"),name:at("name"),continent:at("continent"),type:at("type")};
+        if(Object.values(ix).some(n=>n<0))throw Error("Unexpected directory columns");
+        let best=null,bestScore=-Infinity;
+        for(let n=1;n<lines.length;n++){
+          const line=lines[n];if(!line||!line.toUpperCase().includes(code))continue;
+          const row=parseCSV(line);
+          if(row[ix.continent]!=="NA"||row[ix.type]==="closed")continue;
+          const ids=[row[ix.icao],row[ix.gps],row[ix.ident],row[ix.local],row[ix.iata]].map(x=>String(x||"").toUpperCase());
+          const exact=ids.indexOf(code);
+          if(exact<0)continue;
+          const lat=num(row[ix.lat]),lon=num(row[ix.lon]);
+          if(lat===null||lon===null||Math.abs(lat)>90||Math.abs(lon)>180)continue;
+          const score=(5-exact)*10+({large_airport:4,medium_airport:3,small_airport:2,seaplane_base:1,heliport:0}[row[ix.type]]??0);
+          if(score>bestScore){
+            bestScore=score;
+            best={code:ids[0]||ids[1]||ids[2]||code,name:row[ix.name]||code,lat,lon,source:"OurAirports"};
+          }
+        }
+        if(best)return json(best,200,86400);
+      }catch(e){ console.warn("OurAirports lookup unavailable",String(e)); }
+
+      // Limited fallback; included for backwards compatibility with older clients.
+      try{
+        const up=await get("https://airportsapi.com/api/airports/"+encodeURIComponent(code),3600);
+        if(up.ok){const airport=parseAirport(await up.json());if(airport)return json(airport,200,3600)}
+      }catch(e){/* provider offline */}
+      return json({error:"Airport not found or directory temporarily unavailable. Try its ICAO or FAA identifier."},404);
+    }
 
     if (p === "/api/photo") {
       const hex = (q.get("hex") || "").trim().toLowerCase();

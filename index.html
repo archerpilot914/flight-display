@@ -19,7 +19,7 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--tx);font:16px sy
 #mapw{position:relative;overflow:hidden}#map{position:absolute;inset:0;background:#0a1626}
 #sb{position:absolute;left:8px;top:8px;z-index:900;display:flex;flex-direction:column;gap:6px}
 #sb button{width:70px;padding:8px 2px;font-size:12px;background:#0a1628e6;border:1px solid var(--ln);color:var(--tx);border-radius:8px}
-#sb button i{display:block;font-style:normal;font-size:22px}#homeBtn{position:absolute;right:52px;bottom:16px;z-index:1000;width:52px;height:52px;padding:0;border:2px solid #489dff;border-radius:12px;background:#0a2348f2;box-shadow:0 2px 10px #0008;display:flex;align-items:center;justify-content:center;cursor:pointer}
+#sb button i{display:block;font-style:normal;font-size:22px}#sb button[data-f="heli"] i svg{width:22px;height:22px;display:block;margin:0 auto;transform:rotate(90deg)}#homeBtn{position:absolute;right:52px;bottom:16px;z-index:1000;width:52px;height:52px;padding:0;border:2px solid #489dff;border-radius:12px;background:#0a2348f2;box-shadow:0 2px 10px #0008;display:flex;align-items:center;justify-content:center;cursor:pointer}
 #homeBtn svg{width:30px;height:34px;display:block;transform:translate(-1px,-1px)}#homeBtn:hover,#homeBtn:focus-visible{background:#174477;outline:2px solid #8bc9ff;outline-offset:2px}#sb button.on{border-color:var(--ac);background:#12305c}
 #wx{position:absolute;right:8px;top:8px;z-index:900;background:#0a1628e6;border:1px solid var(--ln);border-radius:8px;padding:7px 11px;font-size:13px;max-width:60%}
 #right{display:flex;flex-direction:column;gap:6px;min-height:0}
@@ -40,7 +40,12 @@ button{font:inherit;color:var(--tx);background:#0f213b;border:1px solid var(--ln
 #flightKeyboard button{flex:1;min-width:0;min-height:43px;padding:5px 0;font-size:18px;font-weight:650;background:#193452;border-color:#38638b}
 #flightKeyboard button.wide{flex:1.7;background:#245281;font-size:15px}
 #flightKeyboard button.go{background:#2064c0}
-#flightKeyboard[hidden]{display:none!important}
+#flightKeyboard[hidden],#airportKeyboard[hidden]{display:none!important}
+.airport-keys{display:grid;gap:5px;width:100%;touch-action:manipulation;user-select:none}
+.airport-keys .key-row{display:flex;gap:5px;justify-content:center}
+.airport-keys button{flex:1;min-width:0;min-height:39px;padding:4px 0;font-size:16px;font-weight:650;background:#193452;border-color:#38638b}
+.airport-keys button.wide{flex:1.7;font-size:14px;background:#245281}
+.airport-keys button.go{background:#2064c0}
 @media(max-width:600px){#flightKeyboard button{min-height:39px;font-size:15px}#searchPanel #qi{font-size:17px}}
 table{width:100%;border-collapse:collapse;font-size:16px}th{color:var(--mu);font-weight:500;text-align:left;position:sticky;top:0;background:var(--pn)}
 td,th{padding:8px 4px;border-bottom:1px solid #12243f}tr.r{cursor:pointer}tr.r.s{background:#12305c}
@@ -53,7 +58,9 @@ input,select{width:100%;padding:9px;background:var(--bg);color:var(--tx);border:
 .airport-flight-rule-dot{filter:drop-shadow(0 0 5px #000) drop-shadow(0 0 3px #fff8)}
 .airport-label{position:absolute;left:13px;top:-10px;display:flex;gap:4px;align-items:center;white-space:nowrap;background:#061729eb;color:#fff;border:1px solid #4d6a82;border-radius:5px;padding:3px 5px;font-size:13px;font-weight:800;text-shadow:0 1px 2px #000;box-shadow:0 2px 6px #0008;pointer-events:none}
 .airport-label small{font-size:11px;font-weight:800}
-.rl{background:#0a1628d0;padding:1px 6px;border-radius:4px;color:#fff;font-size:13px;font-weight:600;text-shadow:0 0 3px #000;white-space:nowrap}
+.small-airport-label{background:#091725e6;color:#e1e8f1;border:1px solid #8ca1b6;border-radius:5px;padding:3px 5px;font-size:12px;font-weight:750;white-space:nowrap;text-shadow:0 1px 2px #000;box-shadow:0 2px 5px #0009;pointer-events:none}
+.small-airport-label.private{font-size:11px;opacity:.9}
+.rl{background:transparent;padding:0;color:#fff;font-size:14px;font-weight:750;text-shadow:0 1px 3px #000,0 0 5px #000,1px 1px 2px #000;white-space:nowrap}
 .me{width:16px;height:16px;border-radius:50%;background:#38bdf8;border:3px solid #fff;margin:-8px 0 0 -8px;box-shadow:0 0 8px #38bdf8}
 #sel .photo{float:right;width:44%;max-height:96px;object-fit:cover;border-radius:6px;margin:0 0 6px 8px}
 .photo-status{float:right;width:44%;text-align:right;font-size:13px;margin:0 0 6px 8px}.photo-retry{font-size:12px;padding:2px 7px;margin-left:4px}.phw{float:right;width:44%;margin:0 0 6px 8px}.phw img{width:100%;max-height:110px;object-fit:cover;border-radius:6px;display:block}.credit{font-size:11px;color:var(--mu);text-align:right;margin-top:2px}.credit a{color:var(--mu)}
@@ -82,7 +89,7 @@ input,select{width:100%;padding:9px;background:var(--bg);color:var(--tx);border:
  <div><b>GPS</b><span id="sG">Searching…</span></div>
 </div>
 <div id="mapw" class="box"><div id="map"></div>
- <div id="sb"><button data-f="all" class="on"><i>☰</i>All</button><button data-f="com"><i style="color:var(--com)">✈</i>Commercial</button><button data-f="ga"><i style="color:var(--ga)">✈</i>GA</button><button data-f="mil"><i style="color:var(--mil)">✈</i>Military</button><button data-f="heli"><i style="color:var(--hel)">✢</i>Helicopter</button></div>
+ <div id="sb"><button data-f="all" class="on"><i>☰</i>All</button><button data-f="com"><i style="color:var(--com)">✈</i>Commercial</button><button data-f="ga"><i style="color:var(--ga)">✈</i>GA</button><button data-f="mil"><i style="color:var(--mil)">✈</i>Military</button><button data-f="heli"><i aria-hidden="true"><svg viewBox="0 0 24 24" fill="var(--hel)" stroke="#000" stroke-width=".6"><path d="M10.2 2.2Q12 .7 13.8 2.2L15.2 4.5L15.2 12Q15.2 15 13.5 16L12.7 23H11.3L10.5 16Q8.8 15 8.8 12V4.5Z"/><path d="M11.7 9.5L6 0.9L4.6 1.6L10.5 11.6Z"/><path d="M12.7 10.4L23.2 12.3L22.8 13.8L12 12Z"/><path d="M11.6 11.3L2 19.3L3.1 20.5L12.7 12.5Z"/><circle cx="12" cy="11.5" r="1.5"/></svg></i>Helicopter</button></div>
  <button id="homeBtn" type="button" title="Return to current GPS / home location" aria-label="Return to GPS location"><svg viewBox="0 0 40 46" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M20 2C10.4 2 3.5 9.1 3.5 18.3c0 12.4 16.5 25.5 16.5 25.5S36.5 30.7 36.5 18.3C36.5 9.1 29.6 2 20 2Z" fill="#2698ee" stroke="#b1e5ff" stroke-width="1.7"/><circle cx="20" cy="18" r="12.3" fill="#fff"/><path d="M10.8 18.7 20 11l9.2 7.7h-2.3v9H13.1v-9Z" fill="#173653"/><rect x="18" y="21" width="4" height="6.7" fill="#fff"/></svg></button>
  <div id="wx">Weather loading…</div><div id="leg" class="box" style="position:absolute;left:8px;bottom:8px;z-index:900;padding:4px 8px;font-size:11px;display:flex;gap:8px"><span class="mu">Airports</span><span style="color:#22c55e">● VFR</span><span style="color:#3b82f6">● MVFR</span><span style="color:#ec4899">● IFR</span><span style="color:#a855f7">● LIFR</span><span style="color:#6b7280">● no data</span></div><div id="mapmsg" class="box" style="display:none;position:absolute;left:84px;bottom:8px;z-index:900;padding:6px 10px;font-size:12px">Map tiles can’t load — check internet or ad-blocker</div></div>
 <aside id="right"><div id="sel" class="box"></div><div id="view" class="box"></div></aside>
@@ -100,6 +107,45 @@ const SOURCES=[ // Try the same-origin Worker relay, then direct sources
  {n:"OpenSky",min:30000,u:(a,b,r)=>{a=+a;b=+b;const d=r/60,e=d/Math.cos(a*Math.PI/180);return `https://opensky-network.org/api/states/all?lamin=${a-d}&lomin=${b-e}&lamax=${a+d}&lomax=${b+e}`},
   p:j=>(j.states||[]).filter(t=>t[5]!=null&&t[6]!=null).map(t=>({hex:t[0],flight:(t[1]||"").trim(),lat:t[6],lon:t[5],alt_baro:t[8]?"ground":(t[7]!=null?Math.round(t[7]*3.28084):undefined),gs:t[9]!=null?t[9]*1.94384:undefined,track:t[10],baro_rate:t[11]!=null?Math.round(t[11]*196.85):undefined,squawk:t[14],category:t[17]===8?"A7":""}))}];
 const AP=[["KLCI","Laconia",43.5727,-71.4189],["KCON","Concord",43.2027,-71.5023],["KMHT","Manchester",42.9326,-71.4357],["KASH","Nashua",42.7817,-71.5148],["KPSM","Portsmouth",43.0779,-70.8233],["KSFM","Sanford",43.3939,-70.7088],["KDAW","Rochester",43.2841,-71.0292],["KPWM","Portland",43.6462,-70.3093],["KBOS","Boston Logan",42.3643,-71.0052],["KBED","Hanscom",42.47,-71.289],["KORH","Worcester",42.2673,-71.8757],["KEEN","Keene",42.8984,-72.2708],["KLEB","Lebanon",43.6261,-72.3042]];
+// Identifiers and coordinates sourced from New Hampshire airport listings; labels are not navigation data.
+const dms=x=>{const [d,m,sec]=x.split(":").map(Number);return d+m/60+sec/3600};
+const SMALL_AP=`1P1|Plymouth Municipal|43:46:45|71:45:13|0
+2N2|Newfound Valley|43:35:31|71:45:05|0
+4MB|Moultonborough|43:46:06|71:23:12|0
+2B3|Parlin Field|43:23:17|72:11:21|0
+5B9|Dean Memorial|44:04:50|72:00:28|0
+1B5|Franconia|44:11:45|71:44:58|0
+8B2|Twin Mountain|44:15:50|71:32:51|0
+KBML|Berlin Regional|44:34:31|71:10:33|0
+KHIE|Mount Washington Regional|44:22:03|71:32:40|0
+KCNH|Claremont Municipal|43:22:13|72:22:07|0
+KAFN|Jaffrey Silver Ranch|42:48:18|72:00:10|0
+7B3|Hampton Airfield|42:57:45|70:49:43|0
+8B1|Hawthorne-Feather Airpark|43:04:00|71:53:58|0
+2G8|Gorham|44:23:35|71:11:48|0
+KERR|Errol|44:47:32|71:09:51|0
+4C4|Gifford Field|44:53:00|71:29:58|0
+NH18|Chickville|43:44:00|71:09:04|1
+NH15|Locke Lake|43:23:12|71:14:00|1
+NH31|Mountain View Field|43:39:00|71:08:58|1
+NH25|Flying H Skyport|43:41:12|71:17:21|1
+12NH|Gile Pond|43:29:43|71:39:15|1
+NH20|Ward Field|43:29:32|71:38:45|1
+94NH|Tucker Farm|43:28:35|71:44:50|1
+NH49|Bradley Field|43:58:13|71:40:46|1
+NH38|Leavitt|43:58:21|71:10:11|1
+NH69|Windsock Village|43:49:50|71:11:13|1
+NH96|Wentworth Aerodrome|43:52:24|71:54:16|1
+NH40|Eagles Nest|43:24:16|71:57:01|1
+NH07|Cooper Farm|43:16:49|71:27:23|1
+NH84|Northwood|43:12:27|71:13:16|1
+NH43|Murphy-Sherwood Park|43:10:46|71:08:13|1
+NH88|Country Club Air Park|43:04:02|71:36:40|1
+NH86|Intervale|43:10:30|71:47:14|1
+NH61|Heaton|42:58:05|71:10:52|1
+NH60|Huff Memorial|42:57:38|71:39:12|1
+01NH|Moore Airfield|43:38:40|72:05:13|1
+23NH|Windswept|43:07:49|72:00:53|1`.trim().split("\n").map(row=>{const [id,name,la,lo,p]=row.split("|");return[id,name,dms(la),-dms(lo),+p]});
 let cfg={relay:"",poll:10,lat:null,lon:null,radar:true,rings:true,aps:true,nr:25};
 try{Object.assign(cfg,JSON.parse(localStorage.getItem("fdcfg")||"{}"))}catch(e){}
 const save=()=>{try{localStorage.setItem("fdcfg",JSON.stringify(cfg))}catch(e){}};
@@ -109,11 +155,12 @@ const shrink=(f,cb)=>{const r=new FileReader();r.onload=()=>{const i=new Image()
 let tz;
 const CC={VFR:"#22c55e",MVFR:"#3b82f6",IFR:"#ec4899",LIFR:"#a855f7",NA:"#6b7280"};let cats={};
 let me={lat:cfg.lat??43.5727,lon:cfg.lon??-71.4189,gps:false}, data=[], filter="all", view="traffic", sel=null, follow=false, trailOn=false, src=0, wx=null, trails={}, mk={}, q="";
-let remoteAircraft=null,remoteFoundAt=0,searchError="",searchBusy=false,routePts=[],homeMode=true,keyboardOpen=true;
+let remoteAircraft=null,remoteFoundAt=0,searchError="",searchBusy=false,routePts=[],homeMode=true,keyboardOpen=true,airportKeyboardOpen=false,selectedWeatherAirport=null,weatherRequest=0,trafficAirport=null,airportQuery="",airportSearchError="",airportSearchBusy=false,trafficGeneration=0,remoteAirports=[],remoteCats={},airportLayerRequest=0;
 const routeCache=new Map();
 const rad=x=>x*Math.PI/180;
 const dist=(a,b,c,d)=>{const p=rad(c-a),r=rad(d-b),x=Math.sin(p/2)**2+Math.cos(rad(a))*Math.cos(rad(c))*Math.sin(r/2)**2;return 6371000*2*Math.asin(Math.sqrt(x))/NM};
-const dme=a=>dist(me.lat,me.lon,a.lat,a.lon);
+const trafficCenter=()=>trafficAirport?{lat:trafficAirport.lat,lon:trafficAirport.lon}:me;
+const dme=a=>{const c=trafficCenter();return dist(c.lat,c.lon,a.lat,a.lon)};
 const kind=a=>/^(EC35|EC45|H135|H145)$/.test(String(a.t||"").trim().toUpperCase())||a.category==="A7"?"heli":(a.dbFlags||0)&1?"mil":/^[A-Z]{3}\d/.test((a.flight||"").trim())?"com":"ga";
 const COL={com:"#fbbf24",ga:"#4ade80",mil:"#f87171",heli:"#fb923c"};
 const nm=a=>(a.flight||"").trim()||a.r||a.hex.toUpperCase();
@@ -125,6 +172,11 @@ const HELICOPTER='<path d="M10.2 2.2Q12 .7 13.8 2.2L15.2 4.5L15.2 12Q15.2 15 13.
 
 // ---------- map ----------
 const map=L.map("map",{zoomControl:false,attributionControl:true}).setView([me.lat,me.lon],10);
+const RADAR_RADIUS_NM=12;
+function centerRadar(la,lo){
+ const d=RADAR_RADIUS_NM/60,cos=Math.max(.2,Math.cos(la*Math.PI/180));
+ map.fitBounds([[la-d,lo-d/cos],[la+d,lo+d/cos]],{padding:[12,12],animate:false,maxZoom:14});
+}
 L.control.zoom({position:"bottomright"}).addTo(map);
 const ES="https://server.arcgisonline.com/ArcGIS/rest/services/",BASES={topo:"World_Topo_Map",street:"World_Street_Map",sat:"World_Imagery",vfr:"World_Topo_Map",tac:"World_Topo_Map",ifrl:"World_Topo_Map",ifrh:"World_Topo_Map"};
 const ATTR='Tiles © Esri • Aircraft: <a href="https://adsb.lol">adsb.lol</a> (ODbL) / <a href="https://adsb.fi">adsb.fi</a> / <a href="https://adsb.one">adsb.one</a> • Routes: FlightAware / adsbdb • Not for navigation';
@@ -141,27 +193,43 @@ function setBase(k){
 }
 setBase(cfg.base);
 const radar=L.tileLayer.wms("https://opengeo.ncep.noaa.gov/geoserver/conus/conus_bref_qcd/ows",{layers:"conus_bref_qcd",format:"image/png",transparent:true,opacity:.65,zIndex:5});
-const ringL=L.layerGroup(), apL=L.layerGroup(), acL=L.layerGroup().addTo(map), trL=L.layerGroup().addTo(map), meL=L.layerGroup().addTo(map);
+const ringL=L.layerGroup(), apL=L.layerGroup(), smallApL=L.layerGroup(), acL=L.layerGroup().addTo(map), trL=L.layerGroup().addTo(map), meL=L.layerGroup().addTo(map);
 function drawHome(){
  ringL.clearLayers();meL.clearLayers();
- [5,10,25].forEach(r=>{L.circle([me.lat,me.lon],{radius:r*NM,color:cfg.base==="sat"?"#ffffff":"#0b3d91",weight:1.8,dashArray:"6 6",fill:false,opacity:.7}).addTo(ringL);
-  L.marker([me.lat+r*NM/111320,me.lon],{interactive:false,icon:L.divIcon({className:"",html:`<div class="rl" style="transform:translate(-50%,-110%)">${r} NM</div>`})}).addTo(ringL)});
+ const center=trafficCenter();
+ [5,10,25].forEach(r=>{L.circle([center.lat,center.lon],{radius:r*NM,color:cfg.base==="sat"?"#ffffff":"#0b3d91",weight:1.8,dashArray:"6 6",fill:false,opacity:.7}).addTo(ringL);
+  L.marker([center.lat+r*NM/111320,center.lon],{interactive:false,icon:L.divIcon({className:"",html:`<div class="rl" style="transform:translate(-50%,-110%)">${r} NM</div>`})}).addTo(ringL)});
  L.marker([me.lat,me.lon],{interactive:false,icon:L.divIcon({className:"",html:'<div class="me"></div>'})}).addTo(meL);
 }
 function drawAps(){
  apL.clearLayers();
- AP.forEach(([id,n,la,lo])=>{
-  const cat=cats[id]||"NA",colour=CC[cat]||CC.NA;
+ const available=trafficAirport?remoteAirports.map(a=>[a.id,a.name,a.lat,a.lon]):AP;
+ available.forEach(([id,n,la,lo])=>{
+  const cat=(trafficAirport?remoteCats[id]:cats[id])||"NA",colour=CC[cat]||CC.NA;
   L.circleMarker([la,lo],{radius:9,color:"#ffffff",weight:2.5,opacity:1,fillColor:colour,fillOpacity:1,className:"airport-flight-rule-dot"
-  }).bindTooltip(id+" · "+(cat==="NA"?"Weather unavailable":cat),{direction:"top"}).on("click",()=>map.setView([la,lo],11)).addTo(apL);
+  }).bindTooltip(id+" · "+(cat==="NA"?"Weather unavailable":cat),{direction:"top"}).on("click",()=>selectWeatherAirport(id,true)).addTo(apL);
   L.marker([la,lo],{interactive:false,
    icon:L.divIcon({className:"airport-label-marker",iconSize:[0,0],
     html:`<div class="airport-label"><b>${id}</b> <small style="color:${colour}">${cat==="NA"?"":cat}</small></div>`})
   }).addTo(apL);
  });
 }
-function layers(){const s=(l,on)=>on?l.addTo(map):map.removeLayer(l);s(ringL,cfg.rings);s(apL,cfg.aps);s(radar,cfg.radar)}
-drawHome();drawAps();layers();
+function drawSmallAirports(){
+ smallApL.clearLayers();
+ if(trafficAirport)return;
+ if(!cfg.aps||map.getZoom()<9)return;
+ const showPrivate=map.getZoom()>=11,bounds=map.getBounds().pad(.1);
+ SMALL_AP.forEach(([id,name,la,lo,privateUse])=>{
+  if((privateUse&&!showPrivate)||!bounds.contains([la,lo]))return;
+  L.circleMarker([la,lo],{radius:privateUse?5:6,color:"#d0dce8",weight:2,fillColor:"#677c90",fillOpacity:.95})
+   .bindTooltip(id+" • "+name+(privateUse?" (private use)":"")+" • no METAR category",{direction:"top"})
+   .on("click",()=>selectWeatherAirport(id,true)).addTo(smallApL);
+  L.marker([la,lo],{interactive:false,icon:L.divIcon({className:"",iconSize:[0,0],html:`<div class="small-airport-label${privateUse?" private":""}" style="position:absolute;left:11px;top:-9px">${esc(id)}</div>`})}).addTo(smallApL);
+ });
+}
+map.on("zoomend moveend",drawSmallAirports);
+function layers(){const s=(l,on)=>on?l.addTo(map):map.removeLayer(l);s(ringL,cfg.rings);s(apL,cfg.aps);s(smallApL,cfg.aps);s(radar,cfg.radar);drawSmallAirports()}
+drawHome();drawAps();layers();map.whenReady(()=>centerRadar(me.lat,me.lon));
 
 // ---------- filed route + flown path ----------
 // /api/plan returns: origin/destination, filed [[lat,lon,name]...] (FlightAware key needed), actual [[lat,lon]...] (ADS-B history).
@@ -214,18 +282,41 @@ function airportSummary(a){
 }
 function routeDetails(a){
  const cs=routeKey(a),r=routeCache.get(cs),m='<div class="mu" style="margin-top:8px">';
- if(!cs)return m+'No callsign or registration to look up a route.</div>';
- if(!r)return m+'Select Show Route to load the filed route and flown path.</div>';
- if(r.status==="loading")return m+'Loading filed route and flown path…</div>';
- if(r.status==="error")return m+'Route lookup unavailable.</div>';
- if(r.status!=="ok")return m+'No route data found for this flight.</div>';
- const i=r.info,S=i.sources||{},code=p=>p&&(p.iata||p.icao||"");
- const how=filedKind(i)?"Filed route ("+(S.filed||"FlightAware")+")":S.airports==="ADS-B departure"?"Departure detected from ADS-B history. The destination needs filed-plan data (add a FlightAware key).":S.airports?"Schedule database ("+S.airports+"), checked against this aircraft's real departure":"No route data found.";
- const dep=i.departure&&i.departure.time?" • Departed "+new Date(i.departure.time*1000).toUTCString().slice(17,22)+"Z":"";
- return '<div style="margin-top:8px"><b>'+esc(code(i.origin)||"?")+' → '+esc(code(i.destination)||"?")+'</b>'+(i.airline?' <span class="mu">'+esc(i.airline)+'</span>':'')+'<span class="mu">'+esc(dep)+'</span>'+
-  '<div class="mu">'+esc(how)+(i.route?': '+esc(String(i.route).slice(0,150)):'')+'</div>'+
-  (i.notes&&i.notes.length?'<div class="mu">'+esc(i.notes.join(" "))+'</div>':'')+
-  '<div class="mu">'+(filedKind(i)?'Pink dashed = filed route • ':(code(i.destination)?'Pink dashed = great-circle estimate • ':''))+'Blue = flown path'+(S.actual?' ('+esc(S.actual)+')':' (recorded since you opened this page)')+'</div></div>';
+ if(!cs)return m+'No callsign or registration available to look up a route.</div>';
+ if(!r)return m+'Choose Show Route to look for filed waypoints and recorded ADS-B history.</div>';
+ if(r.status==="loading")return m+'Checking filed route and recorded flight path…</div>';
+ if(r.status==="error")return m+'Route lookup temporarily unavailable.</div>';
+ if(r.status!=="ok")return m+'No verified route available for this aircraft. Actual ADS-B track may still appear after monitoring.</div>';
+ const info=r.info,S=info.sources||{},code=p=>p&&(p.iata||p.icao||"");
+ const valid=routeMatchesAircraft(a,info);
+ const filed=filedKind(info),dep=info.departure&&info.departure.time?" • Departed "+new Date(info.departure.time*1000).toUTCString().slice(17,22)+"Z":"";
+ let section="";
+ if(filed){
+  const points=info.filed.map(p=>p[2]).filter(Boolean);
+  const fa=Number(info.filedAltitude),speed=Number(info.filedAirspeed);
+  const detail=(Number.isFinite(fa)&&fa>0?" • Filed altitude "+(fa<=600?"FL"+fa:Math.round(fa)+" ft"):"")+(Number.isFinite(speed)&&speed>0?" • Filed airspeed "+Math.round(speed)+" kt":"");
+  section='<div style="margin-top:7px;padding:9px;border:1px solid var(--ln);border-radius:8px;max-height:170px;overflow:auto"><b>Filed flight plan</b><div class="mu">'+esc(S.filed||"FlightAware")+esc(detail)+'</div>'+
+   (info.route?'<div style="overflow-wrap:anywhere">'+esc(String(info.route).slice(0,500))+'</div>':'')+
+   (points.length?'<div class="mu">Waypoints: '+esc(points.join(" → ").slice(0,650))+'</div>':'')+'</div>';
+ }else{
+  section='<div class="mu" style="margin-top:6px">No filed waypoints available. Detailed filed flight plans require FlightAware AeroAPI access; other route information is inferred or sourced from public schedules.</div>';
+ }
+ if(!valid)section+='<div class="mu">The reported origin/destination does not agree with this aircraft’s position, so the estimated route was withheld.</div>';
+ const type=filed?"Filed route":S.airports==="ADS-B departure"?"Departure detected from ADS-B history":S.airports?"Schedule match checked against ADS-B departure":"Route unconfirmed";
+ const origin=valid?code(info.origin)||"?":"?",destination=valid?code(info.destination)||"?":"?";
+ return '<div style="margin-top:8px"><b>'+esc(origin)+' → '+esc(destination)+'</b>'+(info.airline?' <span class="mu">'+esc(info.airline)+'</span>':'')+'<span class="mu">'+esc(dep)+'</span></div>'+
+   '<div class="mu">'+esc(type)+'</div>'+section+
+   (info.notes&&info.notes.length?'<div class="mu">'+esc(info.notes.join(" "))+'</div>':'')+
+   '<div class="mu" style="margin-top:5px">'+(filed?'Pink dashed: filed route • ':(valid&&info.origin&&info.destination?'Pink dashed: direct estimate • ':''))+'Blue: observed ADS-B path'+(S.actual?' ('+esc(S.actual)+')':'')+'</div>';
+}
+function routeMatchesAircraft(a,info){
+ if(!info||!info.origin||!info.destination)return true;
+ if(filedKind(info))return true; // Filed flight plan is identified separately from free schedules.
+ const pos=[Number(a.lat),Number(a.lon)],from=[Number(info.origin.latitude),Number(info.origin.longitude)],to=[Number(info.destination.latitude),Number(info.destination.longitude)];
+ if(!pos.every(Number.isFinite)||!from.every(Number.isFinite)||!to.every(Number.isFinite))return true;
+ const df=dist(pos[0],pos[1],from[0],from[1]),dt=dist(pos[0],pos[1],to[0],to[1]),leg=dist(from[0],from[1],to[0],to[1]);
+ // Only reject clearly unrelated routes; do not reject modest diversions or arrivals.
+ return Math.min(df,dt)<=Math.max(130,leg*.65);
 }
 function gcLine(o,d){
  const line=[],segments=60,radian=Math.PI/180,p1=o[0]*radian,l1=o[1]*radian,p2=d[0]*radian,l2=d[1]*radian;
@@ -240,7 +331,7 @@ function gcLine(o,d){
  return line;
 }
 function drawFlightPlan(a){
- const e=routeCache.get(routeKey(a)),info=e&&e.info,pts=[];
+ const e=routeCache.get(routeKey(a)),info0=e&&e.info,info=routeMatchesAircraft(a,info0)?info0:(info0?{...info0,origin:null,destination:null,filed:[]}:null),pts=[];
  const okp=p=>p&&Number.isFinite(Number(p.latitude))&&Number.isFinite(Number(p.longitude));
  let actual=[];
  if(info){
@@ -261,17 +352,18 @@ function fitRoute(){if(follow||["vfr","tac","ifrl","ifrh"].includes(cfg.base)||r
 
 // ---------- traffic ----------
 let lastErr="";
-async function loadInner(){const errs=[];
+async function loadInner(){const errs=[],generation=trafficGeneration,center=trafficCenter();
  const list=(cfg.relay?[{n:"relay",u:(a,b,r)=>cfg.relay.replace(/\/+$/,"")+`?lat=${a}&lon=${b}&r=${r}`}]:[]).concat(SOURCES);
  for(let i=0;i<list.length;i++){
   const s=list[(src+i)%list.length];
   if(s.min&&Date.now()-(s.last||0)<s.min){errs.push(s.n+" throttled");continue}
   try{
-   s.last=Date.now();const r=await fetch(s.u(me.lat.toFixed(3),me.lon.toFixed(3),50),{signal:AbortSignal.timeout(12000)});
+   s.last=Date.now();const r=await fetch(s.u(center.lat.toFixed(3),center.lon.toFixed(3),50),{signal:AbortSignal.timeout(12000)});
    if(!r.ok){let detail="";try{const e=await r.json();detail=(e.error||"")+(e.attempts?" ("+e.attempts.map(x=>x.provider+":"+x.status).join(", ")+")":"")}catch(_){}throw new Error("HTTP "+r.status+(detail?" — "+detail:""))}
    const j=await r.json();
    const incoming=s.p?s.p(j):(j.ac||j.aircraft);
    if(!Array.isArray(incoming))throw Error("Unexpected aircraft data format");
+   if(generation!==trafficGeneration)return;
    data=incoming.filter(a=>a.lat!=null&&a.lon!=null);
    if(remoteAircraft&&Date.now()-remoteFoundAt<90000&&!data.some(a=>a.hex===remoteAircraft.hex))data.push(remoteAircraft);
    src=(src+i)%list.length;
@@ -302,7 +394,7 @@ async function updateFollowedAircraft(){
   draw();
  }catch(e){console.warn("Follow update unavailable",e)}
 }
-let busy=false;const load=async()=>{if(busy)return;busy=true;try{await loadInner();await updateFollowedAircraft()}finally{busy=false}};
+let busy=false;const load=async()=>{if(busy)return;busy=true;const generation=trafficGeneration;try{await loadInner();await updateFollowedAircraft()}finally{busy=false;if(generation!==trafficGeneration)load()}};
 let timer;const sched=()=>{clearInterval(timer);timer=setInterval(load,Math.max(10,cfg.poll)*1000)};
 // Smooth predicted movement from ADS-B groundspeed and track.
 // Positions between actual feed reports are estimates, not confirmed locations.
@@ -453,6 +545,21 @@ function keyboardHtml(){
  return '<div id="flightKeyboard"'+(keyboardOpen?"":' hidden')+'>'+rows.map(chars=>'<div class="key-row">'+[...chars].map(c=>'<button type="button" data-key="'+c+'">'+c+'</button>').join("")+'</div>').join("")+
  '<div class="key-row"><button type="button" class="wide" data-key="BACK">⌫ Delete</button><button type="button" class="wide" data-key="CLEAR">Clear</button><button type="button" class="wide go" data-key="GO">Search ↵</button></div></div>';
 }
+function airportKeyboardHtml(){
+ const rows=["1234567890","QWERTYUIOP","ASDFGHJKL","ZXCVBNM"];
+ return '<div id="airportKeyboard" class="airport-keys"'+(airportKeyboardOpen?"":' hidden')+'>'+rows.map(chars=>'<div class="key-row">'+[...chars].map(c=>'<button type="button" data-airkey="'+c+'">'+c+'</button>').join("")+'</div>').join("")+'<div class="key-row"><button type="button" class="wide" data-airkey="BACK">⌫ Delete</button><button type="button" class="wide" data-airkey="CLEAR">Clear</button><button type="button" class="wide go" data-airkey="GO">Search ↵</button></div></div>';
+}
+function airportKey(key){
+ const field=$("airportSearch");if(!field)return;
+ if(key==="GO"){searchAirport();return}
+ if(key==="CLEAR"){field.value="";airportQuery=""}
+ else{const start=field.selectionStart??field.value.length,end=field.selectionEnd??field.value.length;
+  if(key==="BACK"){field.setRangeText("",start===end?Math.max(0,start-1):start,end,"start")}
+  else field.setRangeText(key,start,end,"end");
+  airportQuery=field.value;
+ }
+ airportSearchError="";updateAirportSearchStatus();field.focus({preventScroll:true});
+}
 function searchKey(key){
  const field=$("qi");if(!field)return;
  if(key==="GO"){lookupFlight();return}
@@ -484,7 +591,16 @@ function renderView(){
   $("flightKeyboard").addEventListener("click",e=>{const b=e.target.closest("[data-key]");if(b)searchKey(b.dataset.key)});
   updateSearchStatus();
  }else if(view==="airports"){
-  v.innerHTML="<b>Nearby airports</b><table><tbody>"+AP.map(([id,n,la,lo])=>[id,n,la,lo,dist(me.lat,me.lon,la,lo)]).sort((a,b)=>a[4]-b[4]).map(([id,n,la,lo,d])=>`<tr class="r" data-ap="${la},${lo}"><td><span style="color:${CC[cats[id]]||CC.NA}">●</span> <b>${id}</b> <span class="mu">${cats[id]||""}</span></td><td>${n}</td><td>${d.toFixed(1)} NM</td></tr>`).join("")+"</tbody></table>";
+  if($("airportSearch")&&document.activeElement===$("airportSearch")){updateAirportSearchStatus();return}
+  const nearby=(trafficAirport?remoteAirports.map(a=>[a.id,a.name,a.lat,a.lon]):AP.concat(SMALL_AP)).map(([id,n,la,lo])=>[id,n,la,lo,dist(trafficCenter().lat,trafficCenter().lon,la,lo)]).sort((a,b)=>a[4]-b[4]).slice(0,45);
+  v.innerHTML=`<div style="display:flex;flex-direction:column;gap:9px;min-height:100%"><b style="font-size:21px">Airports near radar center</b><table><tbody>${nearby.map(([id,n,la,lo,d])=>`<tr class="r" data-ap="${la},${lo}"><td><span style="color:${CC[(trafficAirport?remoteCats[id]:cats[id])]||CC.NA}">●</span> <b>${esc(id)}</b></td><td>${esc(n)}</td><td>${d.toFixed(1)} NM</td></tr>`).join("")}</tbody></table><div id="airportSearchDock" style="position:sticky;bottom:-15px;background:#0a1628;padding:12px 0 6px;border-top:1px solid #38618b;display:flex;flex-direction:column;gap:7px"><b style="font-size:19px">Search another airport</b><div class="row"><input id="airportSearch" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="KJFK, KBOS, KLCI or 1P1" value="${esc(airportQuery)}" style="flex:1;min-width:0;font-size:19px;padding:12px"><button type="button" id="airportGo" style="flex:0 0 92px">Search</button></div><div class="mu" id="airportSearchStatus"></div><button id="airportKbToggle" type="button" style="width:100%">${airportKeyboardOpen?"⌨ Hide keyboard":"⌨ Show keyboard"}</button>${airportKeyboardHtml()}<div class="mu">Enter an airport ID. Home/GPS returns to your local radar.</div></div></div>`;
+  $("airportSearch").oninput=e=>{airportQuery=e.target.value;airportSearchError=""};
+  $("airportSearch").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();searchAirport()}};
+  $("airportGo").onclick=searchAirport;
+  $("airportKbToggle").onclick=()=>{airportKeyboardOpen=!airportKeyboardOpen;$("airportKeyboard").hidden=!airportKeyboardOpen;$("airportKbToggle").textContent=airportKeyboardOpen?"⌨ Hide keyboard":"⌨ Show keyboard"};
+  $("airportKeyboard").addEventListener("pointerdown",e=>{if(e.target.closest("[data-airkey]"))e.preventDefault()});
+  $("airportKeyboard").addEventListener("click",e=>{const b=e.target.closest("[data-airkey]");if(b)airportKey(b.dataset.airkey)});
+  updateAirportSearchStatus();
  }else if(view==="weather"){
   v.innerHTML=wx?`<b>${esc(wx.id)} ${esc(wx.name||"")}</b> • ${wx.dist} NM from you<div class="mu">${esc(wx.src)}${wx.time?" • observed "+wx.time:""}</div>
   <div class="g" style="grid-template-columns:1fr"><div><span>Conditions</span><b>${wx.cond}</b></div><div><span>Temp / Dewpoint</span><b>${wx.temp}°F${wx.dew!=null?" / "+wx.dew+"°F":""}</b></div><div><span>Wind</span><b>${wx.wind}</b></div><div><span>Visibility</span><b>${wx.vis} SM</b></div><div><span>Altimeter</span><b>${wx.alt} inHg</b></div><div><span>Clouds</span><b>${esc(wx.clouds||"—")}</b></div></div>
@@ -509,13 +625,14 @@ function renderView(){
  }
 }
 $("view").addEventListener("click",e=>{
- const r=e.target.closest("tr.r");if(r){if(r.dataset.h)pick(r.dataset.h);else if(r.dataset.ap)map.setView(r.dataset.ap.split(",").map(Number),11)}
+ const r=e.target.closest("tr.r");if(r){if(r.dataset.h)pick(r.dataset.h);else if(r.dataset.ap){const coords=r.dataset.ap.split(",").map(Number),airport=AP.concat(SMALL_AP).find(a=>a[2]===coords[0]&&a[3]===coords[1]);if(airport)selectWeatherAirport(airport[0],true)}}
  const b=e.target.closest("[data-l]");if(b){cfg[b.dataset.l]=!cfg[b.dataset.l];save();layers();renderView()}
  const m=e.target.closest("[data-b]");if(m){cfg.base=m.dataset.b;save();setBase(cfg.base);drawHome();renderView()}});
 $("nav").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;view=b.dataset.v;document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("on",x===b));renderView()});
 function returnHome(){
+ trafficAirport=null;trafficGeneration++;remoteAirports=[];remoteCats={};airportLayerRequest++;drawAps();drawSmallAirports();data=[];src=0;selectedWeatherAirport=null;airportSearchError="";loadWx();Object.values(mk).forEach(m=>acL.removeLayer(m));mk={};motion.clear();
  homeMode=true;follow=false;trailOn=false;sel=null;routePts=[];remoteAircraft=null;remoteFoundAt=0;
- trL.clearLayers();map.stop();map.setView([me.lat,me.lon],10);
+ trL.clearLayers();drawHome();map.stop();centerRadar(me.lat,me.lon);load();
  filter="all";document.querySelectorAll("#sb [data-f]").forEach(b=>b.classList.toggle("on",b.dataset.f==="all"));
  view="traffic";document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("on",b.dataset.v==="traffic"));
  draw();
@@ -547,33 +664,115 @@ async function loadCats(){
   cats=c;drawAps();if(view==="airports")renderView();
  }catch(e){console.warn("Airport flight-rule colors unavailable",e);cats={};drawAps();if(view==="airports")renderView()}
 }
-async function loadWx(){
- const near=AP.map(a=>({id:a[0],n:a[1],d:dist(me.lat,me.lon,a[2],a[3])})).sort((a,b)=>a.d-b.d);
- $("loc").textContent=near[0].id;$("locn").textContent=near[0].n+" • "+near[0].d.toFixed(1)+" NM";
+
+async function loadNearbyAirportDots(){
+ if(!trafficAirport)return;
+ const generation=trafficGeneration,request=++airportLayerRequest,center={...trafficAirport};
  try{
-  const r=await fetch(metarUrl(near.slice(0,4).map(x=>x.id).join(",")));
-  const j=await r.json(),m=near.map(n=>j.find(x=>x.icaoId===n.id)).find(Boolean);
-  if(!m)throw 0;
-  const cv=m.clouds&&m.clouds.length?m.clouds.map(c=>c.cover).includes("OVC")?"OVC":m.clouds.map(c=>c.cover).includes("BKN")?"BKN":m.clouds.map(c=>c.cover).includes("SCT")?"SCT":"FEW":"CLR";
-  wx={src:"METAR (aviationweather.gov)",id:m.icaoId,name:m.name,temp:F(m.temp),dew:m.dewp!=null?F(m.dewp):null,wind:(m.wdir==="VRB"?"VRB":m.wdir+"°")+" @ "+m.wspd+" kt"+(m.wgst?" G"+m.wgst:""),wdir:m.wdir,wspd:m.wspd,vis:String(m.visib),alt:(m.altim*0.02953).toFixed(2),clouds:(m.clouds||[]).map(c=>c.cover+(c.base?String(Math.round(c.base/100)).padStart(3,"0"):"")).join(" "),raw:m.rawOb,cond:cvTxt[cv],icon:cvIc[cv],time:new Date(m.obsTime*1000).toUTCString().slice(17,22)+"Z"};
+  const res=await fetch("/api/nearby-airports?lat="+encodeURIComponent(center.lat)+"&lon="+encodeURIComponent(center.lon),{signal:AbortSignal.timeout(20000)});
+  if(!res.ok)throw Error("Nearby airport lookup failed");
+  const payload=await res.json();
+  if(request!==airportLayerRequest||generation!==trafficGeneration)return;
+  const list=Array.isArray(payload.airports)?payload.airports:[];
+  remoteAirports=list.filter(a=>a&&Number.isFinite(a.lat)&&Number.isFinite(a.lon)&&a.id);
+  if(!remoteAirports.some(a=>a.id===center.id))remoteAirports.unshift({id:center.id,name:center.name,lat:center.lat,lon:center.lon});
+  remoteCats={};drawAps();if(view==="airports"&&document.activeElement!==$("airportSearch"))renderView();
+  const ids=remoteAirports.map(a=>a.id).filter(id=>/^[A-Z]{4}$/.test(id)).slice(0,60);
+  for(let k=0;k<ids.length;k+=18){
+   const r=await fetch(metarUrl(ids.slice(k,k+18).join(",")),{signal:AbortSignal.timeout(12000),cache:"no-store"});
+   if(!r.ok)continue;
+   const reports=await r.json();
+   if(request!==airportLayerRequest||generation!==trafficGeneration)return;
+   if(Array.isArray(reports))for(const m of reports)if(m&&m.icaoId)remoteCats[m.icaoId.toUpperCase()]=catOf(m);
+  }
+  if(request===airportLayerRequest&&generation===trafficGeneration){drawAps();if(view==="airports"&&document.activeElement!==$("airportSearch"))renderView()}
+ }catch(e){console.warn("Remote airport dots unavailable",e)}
+}
+function focusAirport(ap){
+ trafficAirport=ap;trafficGeneration++;selectedWeatherAirport=ap.id;remoteAirports=[{id:ap.id,name:ap.name,lat:ap.lat,lon:ap.lon}];remoteCats={};drawAps();drawSmallAirports();loadNearbyAirportDots();
+ homeMode=false;follow=false;trailOn=false;sel=null;remoteAircraft=null;remoteFoundAt=0;routePts=[];trL.clearLayers();
+ data=[];src=0;Object.values(mk).forEach(m=>acL.removeLayer(m));mk={};motion.clear();
+ map.stop();centerRadar(ap.lat,ap.lon);drawHome();loadWx();load();renderSel();
+ view="airports";document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("on",b.dataset.v==="airports"));renderView();
+}
+function updateAirportSearchStatus(){
+ const el=$("airportSearchStatus");if(el)el.textContent=airportSearchError||(trafficAirport?"Viewing traffic around "+trafficAirport.id+" — "+trafficAirport.name:"Viewing traffic near GPS location");
+ const b=$("airportGo");if(b){b.disabled=airportSearchBusy;b.textContent=airportSearchBusy?"Finding…":"Search"}
+}
+async function searchAirport(){
+ const code=airportQuery.trim().toUpperCase().replace(/[^A-Z0-9]/g,"");
+ if(!/^[A-Z0-9]{3,4}$/.test(code)){airportSearchError="Enter a 3- or 4-character airport ID.";updateAirportSearchStatus();return}
+ airportSearchBusy=true;airportSearchError="";updateAirportSearchStatus();
+ try{
+  let ap=AP.concat(SMALL_AP).find(a=>a[0]===code||a[0].replace(/^K/,"")===code);
+  if(ap)ap={id:ap[0],name:ap[1],lat:ap[2],lon:ap[3]};
+  else{
+   const res=await fetch("/api/airport-lookup?code="+encodeURIComponent(code),{signal:AbortSignal.timeout(11000)});
+   const j=await res.json();if(!res.ok)throw Error(j.error||"Airport unavailable");
+   ap={id:j.code,name:j.name,lat:Number(j.lat),lon:Number(j.lon)};
+  }
+  if(!Number.isFinite(ap.lat)||!Number.isFinite(ap.lon))throw Error("Airport coordinates unavailable");
+  airportQuery=ap.id;airportSearchError="Radar centered on "+ap.id+" ("+ap.name+").";
+  focusAirport(ap);
+ }catch(e){airportSearchError="Could not locate airport: "+e.message}
+ finally{airportSearchBusy=false;updateAirportSearchStatus()}
+}
+function selectWeatherAirport(id,center=false){
+ const ap=AP.concat(SMALL_AP).find(a=>a[0]===id)||remoteAirports.filter(a=>a.id===id).map(a=>[a.id,a.name,a.lat,a.lon])[0];if(!ap)return;
+ focusAirport({id:ap[0],name:ap[1],lat:ap[2],lon:ap[3]});
+
+}
+async function loadWx(){
+ const request=++weatherRequest;
+ const near=AP.map(a=>({id:a[0],n:a[1],lat:a[2],lon:a[3],d:dist(me.lat,me.lon,a[2],a[3])})).sort((a,b)=>a.d-b.d);
+ const extra=SMALL_AP.find(a=>a[0]===selectedWeatherAirport);
+ const remote=(remoteAirports.find(a=>a.id===selectedWeatherAirport)||trafficAirport&&trafficAirport.id===selectedWeatherAirport?remoteAirports.find(a=>a.id===selectedWeatherAirport)||trafficAirport:null);
+ const chosen=near.find(a=>a.id===selectedWeatherAirport)||(remote?{id:remote.id,n:remote.name,lat:remote.lat,lon:remote.lon,d:dist(me.lat,me.lon,remote.lat,remote.lon)}:null)||(extra?{id:extra[0],n:extra[1],lat:extra[2],lon:extra[3],d:dist(me.lat,me.lon,extra[2],extra[3])}:null)||near[0];
+ const selected=!!selectedWeatherAirport;
+ const lookup=selected?[chosen]:near.slice(0,4);
+ $("loc").textContent=chosen.id;
+ $("locn").textContent=chosen.n+" • "+chosen.d.toFixed(1)+" NM"+(selected?" • Selected":"");
+ $("tmp").textContent="—°F";$("cnd").textContent="Weather loading…";
+ let result;
+ try{
+  const r=await fetch(metarUrl(lookup.map(x=>x.id).join(",")),{cache:"no-store"});
+  if(!r.ok)throw Error("METAR unavailable");
+  const j=await r.json();
+  const m=lookup.map(n=>j.find(x=>x.icaoId===n.id)).find(Boolean);
+  if(!m)throw Error("No METAR for airport");
+  const clouds=(m.clouds||[]).map(c=>c.cover);
+  const cv=clouds.includes("OVC")?"OVC":clouds.includes("BKN")?"BKN":clouds.includes("SCT")?"SCT":clouds.includes("FEW")?"FEW":"CLR";
+  result={src:"METAR (aviationweather.gov)",id:m.icaoId,name:m.name||chosen.n,temp:F(m.temp),dew:m.dewp!=null?F(m.dewp):null,wind:(m.wdir==="VRB"?"VRB":m.wdir+"°")+" @ "+m.wspd+" kt"+(m.wgst?" G"+m.wgst:""),wdir:m.wdir,wspd:m.wspd,vis:String(m.visib),alt:(m.altim*0.02953).toFixed(2),clouds:(m.clouds||[]).map(c=>c.cover+(c.base?String(Math.round(c.base/100)).padStart(3,"0"):"")).join(" "),raw:m.rawOb,cond:cvTxt[cv],icon:cvIc[cv],time:m.obsTime?new Date(m.obsTime*1000).toUTCString().slice(17,22)+"Z":""};
  }catch(e){
-  try{
-   const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${me.lat}&longitude=${me.lon}&current=temperature_2m,wind_speed_10m,wind_direction_10m,pressure_msl,cloud_cover,visibility&temperature_unit=fahrenheit&wind_speed_unit=kn`);
-   const c=(await r.json()).current,cc=c.cloud_cover,k=cc<15?"CLR":cc<35?"FEW":cc<60?"SCT":cc<85?"BKN":"OVC";
-   wx={src:"Open-Meteo model data (METAR unavailable)",id:near[0].id,name:near[0].n,temp:Math.round(c.temperature_2m),dew:null,wind:Math.round(c.wind_direction_10m)+"° @ "+Math.round(c.wind_speed_10m)+" kt",wdir:Math.round(c.wind_direction_10m),wspd:Math.round(c.wind_speed_10m),vis:Math.min(10,Math.round(c.visibility/1609.34)),alt:(c.pressure_msl*0.02953).toFixed(2),clouds:cc+"% cover",raw:"",cond:cvTxt[k],icon:cvIc[k]};
-  }catch(e2){wx=null;$("cnd").textContent="Weather unavailable";return}
+  if(selected){
+   // Never substitute GPS-local conditions for the chosen airport.
+   result={src:"METAR unavailable",id:chosen.id,name:chosen.n,temp:"—",dew:null,wind:"—",vis:"—",alt:"—",clouds:"No METAR available for selected airport",raw:"",cond:"Unavailable",icon:"",time:""};
+  }else{
+   try{
+    const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${me.lat}&longitude=${me.lon}&current=temperature_2m,wind_speed_10m,wind_direction_10m,pressure_msl,cloud_cover,visibility&temperature_unit=fahrenheit&wind_speed_unit=kn`);
+    if(!r.ok)throw Error("Forecast unavailable");
+    const c=(await r.json()).current,cc=c.cloud_cover,k=cc<15?"CLR":cc<35?"FEW":cc<60?"SCT":cc<85?"BKN":"OVC";
+    result={src:"Open-Meteo model data (METAR unavailable)",id:chosen.id,name:chosen.n,temp:Math.round(c.temperature_2m),dew:null,wind:Math.round(c.wind_direction_10m)+"° @ "+Math.round(c.wind_speed_10m)+" kt",wdir:Math.round(c.wind_direction_10m),wspd:Math.round(c.wind_speed_10m),vis:Math.min(10,Math.round(c.visibility/1609.34)),alt:(c.pressure_msl*0.02953).toFixed(2),clouds:cc+"% cover",raw:"",cond:cvTxt[k],icon:cvIc[k]};
+   }catch(e2){
+    result={src:"Weather unavailable",id:chosen.id,name:chosen.n,temp:"—",dew:null,wind:"—",vis:"—",alt:"—",clouds:"Weather unavailable",raw:"",cond:"Unavailable",icon:"",time:""};
+   }
+  }
  }
- const ap=AP.find(a=>a[0]===wx.id);wx.dist=ap?dist(me.lat,me.lon,ap[2],ap[3]).toFixed(1):"—";$("loc").textContent=wx.id;$("locn").textContent=(ap?ap[1]:wx.id)+" • "+wx.dist+" NM";
- $("tmp").textContent=wx.temp+"°F";$("cnd").textContent=wx.icon+" "+wx.cond;
- $("wnd").textContent="Wind "+wx.wind;$("vis").textContent=`Vis ${wx.vis} SM • Alt ${wx.alt} inHg`;
- $("wx").innerHTML=`<b>${wx.id}</b> (${wx.dist} NM) ${wx.icon} ${wx.temp}°F • ${wx.wind} • ${wx.vis} SM • ${wx.alt}<br><span class="mu">${esc(wx.clouds||"")}${wx.time?" • "+wx.time:""}</span>`;
+ if(request!==weatherRequest)return;
+ wx=result;
+ wx.dist=chosen.d.toFixed(1);
+ $("loc").textContent=wx.id;
+ $("locn").textContent=chosen.n+" • "+wx.dist+" NM"+(selected?" • Selected":"");
+ $("tmp").textContent=wx.temp+"°F";$("cnd").textContent=(wx.icon?wx.icon+" ":"")+wx.cond;
+ $("wnd").textContent="Wind "+wx.wind;$("vis").textContent="Vis "+wx.vis+" SM • Alt "+wx.alt+" inHg";
+ $("wx").innerHTML=`<b>${esc(wx.id)}</b> (${wx.dist} NM) ${wx.icon} ${wx.temp}°F • ${esc(wx.wind)} • ${esc(wx.vis)} SM • ${esc(wx.alt)}<br><span class="mu">${esc(wx.clouds||"")}${wx.time?" • "+esc(wx.time):""}</span>`;
  if(view==="weather")renderView();
 }
 
 // ---------- GPS, clock, status ----------
 async function loadTz(){try{const j=await(await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${me.lat}&longitude=${me.lon}&current=temperature_2m&timezone=auto`)).json();new Intl.DateTimeFormat([],{timeZone:j.timezone});tz=j.timezone;tick()}catch(e){}}
 let gw=null,first=true;
-function setMe(la,lo,gps){me={lat:la,lon:lo,gps};drawHome();if(homeMode)map.setView([la,lo],map.getZoom());load();loadWx();loadTz();$("sG").className=gps?"ok":"mu";$("sG").textContent=gps?"Fix":"Manual"}
+function setMe(la,lo,gps){me={lat:la,lon:lo,gps};drawHome();if(homeMode)centerRadar(la,lo);if(!trafficAirport)load();loadWx();loadTz();$("sG").className=gps?"ok":"mu";$("sG").textContent=gps?"Fix":"Manual"}
 if(navigator.geolocation&&cfg.lat==null){
  gw=navigator.geolocation.watchPosition(p=>{
   const moved=dist(me.lat,me.lon,p.coords.latitude,p.coords.longitude)>0.5;
