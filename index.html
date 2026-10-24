@@ -40,7 +40,12 @@ button{font:inherit;color:var(--tx);background:#0f213b;border:1px solid var(--ln
 #flightKeyboard button{flex:1;min-width:0;min-height:43px;padding:5px 0;font-size:18px;font-weight:650;background:#193452;border-color:#38638b}
 #flightKeyboard button.wide{flex:1.7;background:#245281;font-size:15px}
 #flightKeyboard button.go{background:#2064c0}
-#flightKeyboard[hidden]{display:none!important}
+#flightKeyboard[hidden],#airportKeyboard[hidden]{display:none!important}
+.airport-keys{display:grid;gap:5px;width:100%;touch-action:manipulation;user-select:none}
+.airport-keys .key-row{display:flex;gap:5px;justify-content:center}
+.airport-keys button{flex:1;min-width:0;min-height:39px;padding:4px 0;font-size:16px;font-weight:650;background:#193452;border-color:#38638b}
+.airport-keys button.wide{flex:1.7;font-size:14px;background:#245281}
+.airport-keys button.go{background:#2064c0}
 @media(max-width:600px){#flightKeyboard button{min-height:39px;font-size:15px}#searchPanel #qi{font-size:17px}}
 table{width:100%;border-collapse:collapse;font-size:16px}th{color:var(--mu);font-weight:500;text-align:left;position:sticky;top:0;background:var(--pn)}
 td,th{padding:8px 4px;border-bottom:1px solid #12243f}tr.r{cursor:pointer}tr.r.s{background:#12305c}
@@ -55,7 +60,7 @@ input,select{width:100%;padding:9px;background:var(--bg);color:var(--tx);border:
 .airport-label small{font-size:11px;font-weight:800}
 .small-airport-label{background:#091725e6;color:#e1e8f1;border:1px solid #8ca1b6;border-radius:5px;padding:3px 5px;font-size:12px;font-weight:750;white-space:nowrap;text-shadow:0 1px 2px #000;box-shadow:0 2px 5px #0009;pointer-events:none}
 .small-airport-label.private{font-size:11px;opacity:.9}
-.rl{background:#0a1628d0;padding:1px 6px;border-radius:4px;color:#fff;font-size:13px;font-weight:600;text-shadow:0 0 3px #000;white-space:nowrap}
+.rl{background:transparent;padding:0;color:#fff;font-size:14px;font-weight:750;text-shadow:0 1px 3px #000,0 0 5px #000,1px 1px 2px #000;white-space:nowrap}
 .me{width:16px;height:16px;border-radius:50%;background:#38bdf8;border:3px solid #fff;margin:-8px 0 0 -8px;box-shadow:0 0 8px #38bdf8}
 #sel .photo{float:right;width:44%;max-height:96px;object-fit:cover;border-radius:6px;margin:0 0 6px 8px}
 .photo-status{float:right;width:44%;text-align:right;font-size:13px;margin:0 0 6px 8px}.photo-retry{font-size:12px;padding:2px 7px;margin-left:4px}.phw{float:right;width:44%;margin:0 0 6px 8px}.phw img{width:100%;max-height:110px;object-fit:cover;border-radius:6px;display:block}.credit{font-size:11px;color:var(--mu);text-align:right;margin-top:2px}.credit a{color:var(--mu)}
@@ -150,7 +155,7 @@ const shrink=(f,cb)=>{const r=new FileReader();r.onload=()=>{const i=new Image()
 let tz;
 const CC={VFR:"#22c55e",MVFR:"#3b82f6",IFR:"#ec4899",LIFR:"#a855f7",NA:"#6b7280"};let cats={};
 let me={lat:cfg.lat??43.5727,lon:cfg.lon??-71.4189,gps:false}, data=[], filter="all", view="traffic", sel=null, follow=false, trailOn=false, src=0, wx=null, trails={}, mk={}, q="";
-let remoteAircraft=null,remoteFoundAt=0,searchError="",searchBusy=false,routePts=[],homeMode=true,keyboardOpen=true,selectedWeatherAirport=null,weatherRequest=0,trafficAirport=null,airportQuery="",airportSearchError="",airportSearchBusy=false,trafficGeneration=0;
+let remoteAircraft=null,remoteFoundAt=0,searchError="",searchBusy=false,routePts=[],homeMode=true,keyboardOpen=true,airportKeyboardOpen=false,selectedWeatherAirport=null,weatherRequest=0,trafficAirport=null,airportQuery="",airportSearchError="",airportSearchBusy=false,trafficGeneration=0;
 const routeCache=new Map();
 const rad=x=>x*Math.PI/180;
 const dist=(a,b,c,d)=>{const p=rad(c-a),r=rad(d-b),x=Math.sin(p/2)**2+Math.cos(rad(a))*Math.cos(rad(c))*Math.sin(r/2)**2;return 6371000*2*Math.asin(Math.sqrt(x))/NM};
@@ -510,6 +515,21 @@ function keyboardHtml(){
  return '<div id="flightKeyboard"'+(keyboardOpen?"":' hidden')+'>'+rows.map(chars=>'<div class="key-row">'+[...chars].map(c=>'<button type="button" data-key="'+c+'">'+c+'</button>').join("")+'</div>').join("")+
  '<div class="key-row"><button type="button" class="wide" data-key="BACK">⌫ Delete</button><button type="button" class="wide" data-key="CLEAR">Clear</button><button type="button" class="wide go" data-key="GO">Search ↵</button></div></div>';
 }
+function airportKeyboardHtml(){
+ const rows=["1234567890","QWERTYUIOP","ASDFGHJKL","ZXCVBNM"];
+ return '<div id="airportKeyboard" class="airport-keys"'+(airportKeyboardOpen?"":' hidden')+'>'+rows.map(chars=>'<div class="key-row">'+[...chars].map(c=>'<button type="button" data-airkey="'+c+'">'+c+'</button>').join("")+'</div>').join("")+'<div class="key-row"><button type="button" class="wide" data-airkey="BACK">⌫ Delete</button><button type="button" class="wide" data-airkey="CLEAR">Clear</button><button type="button" class="wide go" data-airkey="GO">Search ↵</button></div></div>';
+}
+function airportKey(key){
+ const field=$("airportSearch");if(!field)return;
+ if(key==="GO"){searchAirport();return}
+ if(key==="CLEAR"){field.value="";airportQuery=""}
+ else{const start=field.selectionStart??field.value.length,end=field.selectionEnd??field.value.length;
+  if(key==="BACK"){field.setRangeText("",start===end?Math.max(0,start-1):start,end,"start")}
+  else field.setRangeText(key,start,end,"end");
+  airportQuery=field.value;
+ }
+ airportSearchError="";updateAirportSearchStatus();field.focus({preventScroll:true});
+}
 function searchKey(key){
  const field=$("qi");if(!field)return;
  if(key==="GO"){lookupFlight();return}
@@ -543,10 +563,13 @@ function renderView(){
  }else if(view==="airports"){
   if($("airportSearch")&&document.activeElement===$("airportSearch")){updateAirportSearchStatus();return}
   const nearby=AP.concat(SMALL_AP).map(([id,n,la,lo])=>[id,n,la,lo,dist(trafficCenter().lat,trafficCenter().lon,la,lo)]).sort((a,b)=>a[4]-b[4]).slice(0,45);
-  v.innerHTML=`<div style="display:flex;flex-direction:column;gap:9px;min-height:100%"><b style="font-size:21px">Airports near radar center</b><table><tbody>${nearby.map(([id,n,la,lo,d])=>`<tr class="r" data-ap="${la},${lo}"><td><span style="color:${CC[cats[id]]||CC.NA}">●</span> <b>${esc(id)}</b></td><td>${esc(n)}</td><td>${d.toFixed(1)} NM</td></tr>`).join("")}</tbody></table><div id="airportSearchDock" style="position:sticky;bottom:-15px;background:#0a1628;padding:12px 0 6px;border-top:1px solid #38618b;display:flex;flex-direction:column;gap:7px"><b style="font-size:19px">Search another airport</b><div class="row"><input id="airportSearch" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="KJFK, KBOS, KLCI or 1P1" value="${esc(airportQuery)}" style="flex:1;min-width:0;font-size:19px;padding:12px"><button type="button" id="airportGo" style="flex:0 0 92px">Search</button></div><div class="mu" id="airportSearchStatus"></div><div class="mu">Enter an airport ID. Home/GPS returns to your local radar.</div></div></div>`;
+  v.innerHTML=`<div style="display:flex;flex-direction:column;gap:9px;min-height:100%"><b style="font-size:21px">Airports near radar center</b><table><tbody>${nearby.map(([id,n,la,lo,d])=>`<tr class="r" data-ap="${la},${lo}"><td><span style="color:${CC[cats[id]]||CC.NA}">●</span> <b>${esc(id)}</b></td><td>${esc(n)}</td><td>${d.toFixed(1)} NM</td></tr>`).join("")}</tbody></table><div id="airportSearchDock" style="position:sticky;bottom:-15px;background:#0a1628;padding:12px 0 6px;border-top:1px solid #38618b;display:flex;flex-direction:column;gap:7px"><b style="font-size:19px">Search another airport</b><div class="row"><input id="airportSearch" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="KJFK, KBOS, KLCI or 1P1" value="${esc(airportQuery)}" style="flex:1;min-width:0;font-size:19px;padding:12px"><button type="button" id="airportGo" style="flex:0 0 92px">Search</button></div><div class="mu" id="airportSearchStatus"></div><button id="airportKbToggle" type="button" style="width:100%">${airportKeyboardOpen?"⌨ Hide keyboard":"⌨ Show keyboard"}</button>${airportKeyboardHtml()}<div class="mu">Enter an airport ID. Home/GPS returns to your local radar.</div></div></div>`;
   $("airportSearch").oninput=e=>{airportQuery=e.target.value;airportSearchError=""};
   $("airportSearch").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();searchAirport()}};
   $("airportGo").onclick=searchAirport;
+  $("airportKbToggle").onclick=()=>{airportKeyboardOpen=!airportKeyboardOpen;$("airportKeyboard").hidden=!airportKeyboardOpen;$("airportKbToggle").textContent=airportKeyboardOpen?"⌨ Hide keyboard":"⌨ Show keyboard"};
+  $("airportKeyboard").addEventListener("pointerdown",e=>{if(e.target.closest("[data-airkey]"))e.preventDefault()});
+  $("airportKeyboard").addEventListener("click",e=>{const b=e.target.closest("[data-airkey]");if(b)airportKey(b.dataset.airkey)});
   updateAirportSearchStatus();
  }else if(view==="weather"){
   v.innerHTML=wx?`<b>${esc(wx.id)} ${esc(wx.name||"")}</b> • ${wx.dist} NM from you<div class="mu">${esc(wx.src)}${wx.time?" • observed "+wx.time:""}</div>
