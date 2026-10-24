@@ -150,11 +150,12 @@ const shrink=(f,cb)=>{const r=new FileReader();r.onload=()=>{const i=new Image()
 let tz;
 const CC={VFR:"#22c55e",MVFR:"#3b82f6",IFR:"#ec4899",LIFR:"#a855f7",NA:"#6b7280"};let cats={};
 let me={lat:cfg.lat??43.5727,lon:cfg.lon??-71.4189,gps:false}, data=[], filter="all", view="traffic", sel=null, follow=false, trailOn=false, src=0, wx=null, trails={}, mk={}, q="";
-let remoteAircraft=null,remoteFoundAt=0,searchError="",searchBusy=false,routePts=[],homeMode=true,keyboardOpen=true,selectedWeatherAirport=null,weatherRequest=0;
+let remoteAircraft=null,remoteFoundAt=0,searchError="",searchBusy=false,routePts=[],homeMode=true,keyboardOpen=true,selectedWeatherAirport=null,weatherRequest=0,trafficAirport=null,airportQuery="",airportSearchError="",airportSearchBusy=false,trafficGeneration=0;
 const routeCache=new Map();
 const rad=x=>x*Math.PI/180;
 const dist=(a,b,c,d)=>{const p=rad(c-a),r=rad(d-b),x=Math.sin(p/2)**2+Math.cos(rad(a))*Math.cos(rad(c))*Math.sin(r/2)**2;return 6371000*2*Math.asin(Math.sqrt(x))/NM};
-const dme=a=>dist(me.lat,me.lon,a.lat,a.lon);
+const trafficCenter=()=>trafficAirport?{lat:trafficAirport.lat,lon:trafficAirport.lon}:me;
+const dme=a=>{const c=trafficCenter();return dist(c.lat,c.lon,a.lat,a.lon)};
 const kind=a=>/^(EC35|EC45|H135|H145)$/.test(String(a.t||"").trim().toUpperCase())||a.category==="A7"?"heli":(a.dbFlags||0)&1?"mil":/^[A-Z]{3}\d/.test((a.flight||"").trim())?"com":"ga";
 const COL={com:"#fbbf24",ga:"#4ade80",mil:"#f87171",heli:"#fb923c"};
 const nm=a=>(a.flight||"").trim()||a.r||a.hex.toUpperCase();
@@ -185,8 +186,9 @@ const radar=L.tileLayer.wms("https://opengeo.ncep.noaa.gov/geoserver/conus/conus
 const ringL=L.layerGroup(), apL=L.layerGroup(), smallApL=L.layerGroup(), acL=L.layerGroup().addTo(map), trL=L.layerGroup().addTo(map), meL=L.layerGroup().addTo(map);
 function drawHome(){
  ringL.clearLayers();meL.clearLayers();
- [5,10,25].forEach(r=>{L.circle([me.lat,me.lon],{radius:r*NM,color:cfg.base==="sat"?"#ffffff":"#0b3d91",weight:1.8,dashArray:"6 6",fill:false,opacity:.7}).addTo(ringL);
-  L.marker([me.lat+r*NM/111320,me.lon],{interactive:false,icon:L.divIcon({className:"",html:`<div class="rl" style="transform:translate(-50%,-110%)">${r} NM</div>`})}).addTo(ringL)});
+ const center=trafficCenter();
+ [5,10,25].forEach(r=>{L.circle([center.lat,center.lon],{radius:r*NM,color:cfg.base==="sat"?"#ffffff":"#0b3d91",weight:1.8,dashArray:"6 6",fill:false,opacity:.7}).addTo(ringL);
+  L.marker([center.lat+r*NM/111320,center.lon],{interactive:false,icon:L.divIcon({className:"",html:`<div class="rl" style="transform:translate(-50%,-110%)">${r} NM</div>`})}).addTo(ringL)});
  L.marker([me.lat,me.lon],{interactive:false,icon:L.divIcon({className:"",html:'<div class="me"></div>'})}).addTo(meL);
 }
 function drawAps(){
@@ -315,17 +317,18 @@ function fitRoute(){if(follow||["vfr","tac","ifrl","ifrh"].includes(cfg.base)||r
 
 // ---------- traffic ----------
 let lastErr="";
-async function loadInner(){const errs=[];
+async function loadInner(){const errs=[],generation=trafficGeneration,center=trafficCenter();
  const list=(cfg.relay?[{n:"relay",u:(a,b,r)=>cfg.relay.replace(/\/+$/,"")+`?lat=${a}&lon=${b}&r=${r}`}]:[]).concat(SOURCES);
  for(let i=0;i<list.length;i++){
   const s=list[(src+i)%list.length];
   if(s.min&&Date.now()-(s.last||0)<s.min){errs.push(s.n+" throttled");continue}
   try{
-   s.last=Date.now();const r=await fetch(s.u(me.lat.toFixed(3),me.lon.toFixed(3),50),{signal:AbortSignal.timeout(12000)});
+   s.last=Date.now();const r=await fetch(s.u(center.lat.toFixed(3),center.lon.toFixed(3),50),{signal:AbortSignal.timeout(12000)});
    if(!r.ok){let detail="";try{const e=await r.json();detail=(e.error||"")+(e.attempts?" ("+e.attempts.map(x=>x.provider+":"+x.status).join(", ")+")":"")}catch(_){}throw new Error("HTTP "+r.status+(detail?" — "+detail:""))}
    const j=await r.json();
    const incoming=s.p?s.p(j):(j.ac||j.aircraft);
    if(!Array.isArray(incoming))throw Error("Unexpected aircraft data format");
+   if(generation!==trafficGeneration)return;
    data=incoming.filter(a=>a.lat!=null&&a.lon!=null);
    if(remoteAircraft&&Date.now()-remoteFoundAt<90000&&!data.some(a=>a.hex===remoteAircraft.hex))data.push(remoteAircraft);
    src=(src+i)%list.length;
@@ -538,7 +541,13 @@ function renderView(){
   $("flightKeyboard").addEventListener("click",e=>{const b=e.target.closest("[data-key]");if(b)searchKey(b.dataset.key)});
   updateSearchStatus();
  }else if(view==="airports"){
-  v.innerHTML="<b>Nearby airports</b><table><tbody>"+AP.map(([id,n,la,lo])=>[id,n,la,lo,dist(me.lat,me.lon,la,lo)]).sort((a,b)=>a[4]-b[4]).map(([id,n,la,lo,d])=>`<tr class="r" data-ap="${la},${lo}"><td><span style="color:${CC[cats[id]]||CC.NA}">●</span> <b>${id}</b> <span class="mu">${cats[id]||""}</span></td><td>${n}</td><td>${d.toFixed(1)} NM</td></tr>`).join("")+"</tbody></table>";
+  if($("airportSearch")&&document.activeElement===$("airportSearch")){updateAirportSearchStatus();return}
+  const nearby=AP.concat(SMALL_AP).map(([id,n,la,lo])=>[id,n,la,lo,dist(trafficCenter().lat,trafficCenter().lon,la,lo)]).sort((a,b)=>a[4]-b[4]).slice(0,45);
+  v.innerHTML=`<div style="display:flex;flex-direction:column;gap:9px"><b style="font-size:21px">Find an airport anywhere</b><div class="row"><input id="airportSearch" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="KJFK, KBOS, KLCI or 1P1" value="${esc(airportQuery)}" style="flex:1;min-width:0;font-size:19px;padding:12px"><button type="button" id="airportGo" style="flex:0 0 92px">Search</button></div><div class="mu" id="airportSearchStatus"></div><div class="mu">Search by ICAO, IATA, or FAA airport ID. Selecting an airport moves the radar and refreshes local ADS-B traffic. Home/GPS restores your original coverage.</div><b>Airports near radar center</b><table><tbody>${nearby.map(([id,n,la,lo,d])=>`<tr class="r" data-ap="${la},${lo}"><td><span style="color:${CC[cats[id]]||CC.NA}">●</span> <b>${esc(id)}</b></td><td>${esc(n)}</td><td>${d.toFixed(1)} NM</td></tr>`).join("")}</tbody></table></div>`;
+  $("airportSearch").oninput=e=>{airportQuery=e.target.value;airportSearchError=""};
+  $("airportSearch").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();searchAirport()}};
+  $("airportGo").onclick=searchAirport;
+  updateAirportSearchStatus();
  }else if(view==="weather"){
   v.innerHTML=wx?`<b>${esc(wx.id)} ${esc(wx.name||"")}</b> • ${wx.dist} NM from you<div class="mu">${esc(wx.src)}${wx.time?" • observed "+wx.time:""}</div>
   <div class="g" style="grid-template-columns:1fr"><div><span>Conditions</span><b>${wx.cond}</b></div><div><span>Temp / Dewpoint</span><b>${wx.temp}°F${wx.dew!=null?" / "+wx.dew+"°F":""}</b></div><div><span>Wind</span><b>${wx.wind}</b></div><div><span>Visibility</span><b>${wx.vis} SM</b></div><div><span>Altimeter</span><b>${wx.alt} inHg</b></div><div><span>Clouds</span><b>${esc(wx.clouds||"—")}</b></div></div>
@@ -563,14 +572,14 @@ function renderView(){
  }
 }
 $("view").addEventListener("click",e=>{
- const r=e.target.closest("tr.r");if(r){if(r.dataset.h)pick(r.dataset.h);else if(r.dataset.ap){const coords=r.dataset.ap.split(",").map(Number),airport=AP.find(a=>a[2]===coords[0]&&a[3]===coords[1]);if(airport)selectWeatherAirport(airport[0],true)}}
+ const r=e.target.closest("tr.r");if(r){if(r.dataset.h)pick(r.dataset.h);else if(r.dataset.ap){const coords=r.dataset.ap.split(",").map(Number),airport=AP.concat(SMALL_AP).find(a=>a[2]===coords[0]&&a[3]===coords[1]);if(airport)selectWeatherAirport(airport[0],true)}}
  const b=e.target.closest("[data-l]");if(b){cfg[b.dataset.l]=!cfg[b.dataset.l];save();layers();renderView()}
  const m=e.target.closest("[data-b]");if(m){cfg.base=m.dataset.b;save();setBase(cfg.base);drawHome();renderView()}});
 $("nav").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;view=b.dataset.v;document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("on",x===b));renderView()});
 function returnHome(){
- selectedWeatherAirport=null;loadWx();
+ trafficAirport=null;trafficGeneration++;data=[];src=0;selectedWeatherAirport=null;airportSearchError="";loadWx();
  homeMode=true;follow=false;trailOn=false;sel=null;routePts=[];remoteAircraft=null;remoteFoundAt=0;
- trL.clearLayers();map.stop();map.setView([me.lat,me.lon],10);
+ trL.clearLayers();drawHome();map.stop();map.setView([me.lat,me.lon],10);load();
  filter="all";document.querySelectorAll("#sb [data-f]").forEach(b=>b.classList.toggle("on",b.dataset.f==="all"));
  view="traffic";document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("on",b.dataset.v==="traffic"));
  draw();
@@ -603,17 +612,45 @@ async function loadCats(){
  }catch(e){console.warn("Airport flight-rule colors unavailable",e);cats={};drawAps();if(view==="airports")renderView()}
 }
 
+function focusAirport(ap){
+ trafficAirport=ap;trafficGeneration++;selectedWeatherAirport=ap.id;
+ homeMode=false;follow=false;trailOn=false;sel=null;remoteAircraft=null;remoteFoundAt=0;routePts=[];trL.clearLayers();
+ data=[];src=0;Object.values(mk).forEach(m=>acL.removeLayer(m));mk={};motion.clear();
+ map.stop();map.setView([ap.lat,ap.lon],10);drawHome();loadWx();load();renderSel();renderView();
+}
+function updateAirportSearchStatus(){
+ const el=$("airportSearchStatus");if(el)el.textContent=airportSearchError||(trafficAirport?"Viewing traffic around "+trafficAirport.id+" — "+trafficAirport.name:"Viewing traffic near GPS location");
+ const b=$("airportGo");if(b){b.disabled=airportSearchBusy;b.textContent=airportSearchBusy?"Finding…":"Search"}
+}
+async function searchAirport(){
+ const code=airportQuery.trim().toUpperCase().replace(/[^A-Z0-9]/g,"");
+ if(!/^[A-Z0-9]{3,4}$/.test(code)){airportSearchError="Enter a 3- or 4-character airport ID.";updateAirportSearchStatus();return}
+ airportSearchBusy=true;airportSearchError="";updateAirportSearchStatus();
+ try{
+  let ap=AP.concat(SMALL_AP).find(a=>a[0]===code||a[0].replace(/^K/,"")===code);
+  if(ap)ap={id:ap[0],name:ap[1],lat:ap[2],lon:ap[3]};
+  else{
+   const res=await fetch("/api/airport-lookup?code="+encodeURIComponent(code),{signal:AbortSignal.timeout(11000)});
+   const j=await res.json();if(!res.ok)throw Error(j.error||"Airport unavailable");
+   ap={id:j.code,name:j.name,lat:Number(j.lat),lon:Number(j.lon)};
+  }
+  if(!Number.isFinite(ap.lat)||!Number.isFinite(ap.lon))throw Error("Airport coordinates unavailable");
+  airportQuery=ap.id;airportSearchError="Radar centered on "+ap.id+" ("+ap.name+").";
+  focusAirport(ap);
+ }catch(e){airportSearchError="Could not locate airport: "+e.message}
+ finally{airportSearchBusy=false;updateAirportSearchStatus()}
+}
 function selectWeatherAirport(id,center=false){
  const ap=AP.concat(SMALL_AP).find(a=>a[0]===id);if(!ap)return;
- selectedWeatherAirport=id;
- if(center){homeMode=false;map.setView([ap[2],ap[3]],11)}
- loadWx();
+ focusAirport({id:ap[0],name:ap[1],lat:ap[2],lon:ap[3]});
+
 }
 async function loadWx(){
  const request=++weatherRequest;
  const near=AP.map(a=>({id:a[0],n:a[1],lat:a[2],lon:a[3],d:dist(me.lat,me.lon,a[2],a[3])})).sort((a,b)=>a.d-b.d);
  const extra=SMALL_AP.find(a=>a[0]===selectedWeatherAirport);
- const chosen=near.find(a=>a.id===selectedWeatherAirport)||(extra?{id:extra[0],n:extra[1],lat:extra[2],lon:extra[3],d:dist(me.lat,me.lon,extra[2],extra[3])}:null)||near[0];
+ const remote=trafficAirport&&trafficAirport.id===selectedWeatherAirport?trafficAirport:null;
+ const chosen=near.find(a=>a.id===selectedWeatherAirport)||(remote?{id:remote.id,n:remote.name,lat:remote.lat,lon:remote.lon,d:dist(me.lat,me.lon,remote.lat,remote.lon)}:null)||(extra?{id:extra[0],n:extra[1],lat:extra[2],lon:extra[3],d:dist(me.lat,me.lon,extra[2],extra[3])}:null)||near[0];
  const selected=!!selectedWeatherAirport;
  const lookup=selected?[chosen]:near.slice(0,4);
  $("loc").textContent=chosen.id;
@@ -658,7 +695,7 @@ async function loadWx(){
 // ---------- GPS, clock, status ----------
 async function loadTz(){try{const j=await(await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${me.lat}&longitude=${me.lon}&current=temperature_2m&timezone=auto`)).json();new Intl.DateTimeFormat([],{timeZone:j.timezone});tz=j.timezone;tick()}catch(e){}}
 let gw=null,first=true;
-function setMe(la,lo,gps){me={lat:la,lon:lo,gps};drawHome();if(homeMode)map.setView([la,lo],map.getZoom());load();loadWx();loadTz();$("sG").className=gps?"ok":"mu";$("sG").textContent=gps?"Fix":"Manual"}
+function setMe(la,lo,gps){me={lat:la,lon:lo,gps};drawHome();if(homeMode)map.setView([la,lo],map.getZoom());if(!trafficAirport)load();loadWx();loadTz();$("sG").className=gps?"ok":"mu";$("sG").textContent=gps?"Fix":"Manual"}
 if(navigator.geolocation&&cfg.lat==null){
  gw=navigator.geolocation.watchPosition(p=>{
   const moved=dist(me.lat,me.lon,p.coords.latitude,p.coords.longitude)>0.5;
