@@ -167,36 +167,71 @@ export default {
 
     if (p === "/api/airport-lookup") {
       const code=(q.get("code")||"").trim().toUpperCase();
-      if(!/^[A-Z0-9]{3,4}$/.test(code))return json({error:"Invalid airport ID"},400);
-      // Locally verified fallbacks for the airports that first exposed the lookup issue.
-      const known={
-        KRIC:{code:"KRIC",name:"Richmond International Airport",lat:37.5051811,lon:-77.3197386},
-        KMIA:{code:"KMIA",name:"Miami International Airport",lat:25.7953611,lon:-80.2901158}
-      };
-      if(known[code])return json(known[code],200,86400);
-      const parseAirport=(a)=>{
+      if(!/^[A-Z0-9]{3,4}$/.test(code))return json({error:"Enter a valid 3- or 4-character airport identifier."},400);
+      const parseAirport=a=>{
         if(!a||typeof a!=="object")return null;
-        const lat=num(a.lat??a.latitude),lon=num(a.lon??a.longitude);
+        const lat=num(a.lat??a.latitude??a.latitude_deg??a.lat_deg);
+        const lon=num(a.lon??a.longitude??a.longitude_deg??a.lon_deg);
         if(lat===null||lon===null||Math.abs(lat)>90||Math.abs(lon)>180)return null;
-        return {code:String(a.icaoId||a.code||a.ident||code).toUpperCase(),name:String(a.name||a.site||code),lat,lon};
+        return {code:String(a.icaoId||a.icao_code||a.gps_code||a.code||a.ident||code).toUpperCase(),name:String(a.name||a.site||code),lat,lon};
       };
-      // Aviation Weather Center airport information includes ICAO IDs and coordinates.
-      // Server-side request avoids browser CORS restrictions.
-      try{
+      // First use the dedicated airport endpoint. It does not cover all GA/private fields.
+      try {
         const up=await get("https://aviationweather.gov/api/data/airport?ids="+encodeURIComponent(code)+"&format=json",3600);
         if(up.ok){
           const payload=await up.json();
           const rows=Array.isArray(payload)?payload:[payload];
-          const match=rows.find(a=>[a?.icaoId,a?.iataId,a?.ident].some(v=>String(v||"").toUpperCase()===code))||rows[0];
+          const match=rows.find(a=>[a?.icaoId,a?.iataId,a?.ident,a?.id].some(v=>String(v||"").toUpperCase()===code));
           const airport=parseAirport(match);
           if(airport)return json(airport,200,3600);
         }
-      }catch(e){/* try independent provider */}
+      }catch(e){ /* continue to comprehensive directory */ }
+
+      // OurAirports is a daily refreshed open directory. Includes ICAO, IATA and local
+      // identifiers for US, Canada, Mexico, Central America and the Caribbean.
+      try {
+        const csv=await get("https://davidmegginson.github.io/ourairports-data/airports.csv",86400);
+        if(!csv.ok)throw Error("Airport directory HTTP "+csv.status);
+        const body=await csv.text();
+        const lines=body.split(/\r?\n/);
+        const parseCSV=line=>{
+          const fields=[];let current="",quoted=false;
+          for(let n=0;n<line.length;n++){
+            const ch=line[n];
+            if(ch==='"'){if(quoted&&line[n+1]==='"'){current+='"';n++}else quoted=!quoted}
+            else if(ch===","&&!quoted){fields.push(current);current=""}
+            else current+=ch;
+          }
+          fields.push(current);return fields;
+        };
+        const h=parseCSV(lines[0]),at=name=>h.indexOf(name);
+        const ix={ident:at("ident"),icao:at("icao_code"),gps:at("gps_code"),local:at("local_code"),iata:at("iata_code"),lat:at("latitude_deg"),lon:at("longitude_deg"),name:at("name"),continent:at("continent"),type:at("type")};
+        if(Object.values(ix).some(n=>n<0))throw Error("Unexpected directory columns");
+        let best=null,bestScore=-Infinity;
+        for(let n=1;n<lines.length;n++){
+          const line=lines[n];if(!line||!line.toUpperCase().includes(code))continue;
+          const row=parseCSV(line);
+          if(row[ix.continent]!=="NA"||row[ix.type]==="closed")continue;
+          const ids=[row[ix.icao],row[ix.gps],row[ix.ident],row[ix.local],row[ix.iata]].map(x=>String(x||"").toUpperCase());
+          const exact=ids.indexOf(code);
+          if(exact<0)continue;
+          const lat=num(row[ix.lat]),lon=num(row[ix.lon]);
+          if(lat===null||lon===null||Math.abs(lat)>90||Math.abs(lon)>180)continue;
+          const score=(5-exact)*10+({large_airport:4,medium_airport:3,small_airport:2,seaplane_base:1,heliport:0}[row[ix.type]]??0);
+          if(score>bestScore){
+            bestScore=score;
+            best={code:ids[0]||ids[1]||ids[2]||code,name:row[ix.name]||code,lat,lon,source:"OurAirports"};
+          }
+        }
+        if(best)return json(best,200,86400);
+      }catch(e){ console.warn("OurAirports lookup unavailable",String(e)); }
+
+      // Limited fallback; included for backwards compatibility with older clients.
       try{
         const up=await get("https://airportsapi.com/api/airports/"+encodeURIComponent(code),3600);
-        if(up.ok){const a=parseAirport(await up.json());if(a)return json(a,200,3600)}
-      }catch(e){/* provider temporarily unavailable */}
-      return json({error:"Airport not found in directories. Verify its ICAO or FAA identifier."},404);
+        if(up.ok){const airport=parseAirport(await up.json());if(airport)return json(airport,200,3600)}
+      }catch(e){/* provider offline */}
+      return json({error:"Airport not found or directory temporarily unavailable. Try its ICAO or FAA identifier."},404);
     }
 
     if (p === "/api/photo") {
