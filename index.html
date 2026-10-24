@@ -234,12 +234,14 @@ drawHome();drawAps();layers();map.whenReady(()=>centerRadar(me.lat,me.lon));
 // ---------- filed route + flown path ----------
 // /api/plan returns: origin/destination, filed [[lat,lon,name]...] (FlightAware key needed), actual [[lat,lon]...] (ADS-B history).
 function routeKey(a){return String(a?.flight||a?.r||"").trim().toUpperCase()}
+function routeCacheKey(a){return String(a?.hex||"").trim().toLowerCase()+"|"+routeKey(a)}
+function routeEntry(a){return routeCache.get(routeCacheKey(a))}
 async function lookupRoute(a,force){
  const cs=routeKey(a);if(!cs)return null;
- const old=routeCache.get(cs);
+ const key=routeCacheKey(a),old=routeCache.get(key);
  if(old&&(old.status==="loading"||(!force&&Date.now()-old.time<180000)))return old.promise;
  const entry={time:Date.now(),status:"loading",info:null};
- routeCache.set(cs,entry);
+ routeCache.set(key,entry);
  entry.promise=(async()=>{
   try{
    const res=await fetch("/api/plan?ident="+encodeURIComponent(cs)+"&hex="+encodeURIComponent(a.hex||"")+"&lat="+a.lat+"&lon="+a.lon+(a.track!=null?"&trk="+a.track:""),{signal:AbortSignal.timeout(25000)});
@@ -255,40 +257,33 @@ async function lookupRoute(a,force){
  return entry.promise;
 }
 function filedKind(i){return i&&i.filed&&i.filed.length>1}
-// Free origin/destination lookup independent of optional paid filed-route lookups.
-const airportCache=new Map();
-async function lookupAirports(a){
- const cs=routeKey(a);if(!/^[A-Z0-9]{3,10}$/.test(cs))return;
- const prior=airportCache.get(cs);
- if(prior&&Date.now()-prior.time<3600000)return;
- const entry={status:"loading",time:Date.now()};airportCache.set(cs,entry);
- try{
-  const res=await fetch("/api/airports?callsign="+encodeURIComponent(cs),{signal:AbortSignal.timeout(9000)});
-  if(!res.ok)throw Error("Airport lookup HTTP "+res.status);
-  const j=await res.json();entry.status=j.origin&&j.destination?"ok":"none";entry.info=j;
- }catch(err){entry.status="error"}
- if(sel&&data.some(x=>x.hex===sel&&routeKey(x)===cs))renderSel();
+// Both header and Show Route use the same aircraft-specific validated /api/plan response.
+function routeConfidence(a,info){
+ if(!info||!routeMatchesAircraft(a,info))return "unavailable";
+ if(filedKind(info))return "filed";
+ if(info.sources?.airports==="ADS-B departure")return "observed";
+ if(info.sources?.airports==="adsbdb")return "estimated";
+ return info.origin||info.destination?"estimated":"unavailable";
 }
 function airportSummary(a){
- const cs=routeKey(a),p=routeCache.get(cs),c=airportCache.get(cs);
- const valid=i=>i&&i.origin&&i.destination&&(i.origin.iata||i.origin.icao)&&(i.destination.iata||i.destination.icao);
- const fromPlan=p&&p.info&&(p.info.origin||p.info.destination)?p.info:null;
- const fromFree=c&&c.status==="ok"&&valid(c.info)?c.info:null;
- const info=fromPlan||fromFree;
- const code=ap=>ap&&(ap.iata||ap.icao||"");
- if(info)return '<div style="font-size:17px;font-weight:700;margin:9px 0">From '+esc(code(info.origin)||"Unknown")+' → To '+esc(code(info.destination)||"Unknown")+'</div>';
- if((p&&p.status==="loading")||(c&&c.status==="loading"))return '<div class="mu">Finding departure and destination…</div>';
- return '<div class="mu">Departure / destination unavailable from free flight data</div>';
+ const entry=routeEntry(a),code=p=>p&&(p.iata||p.icao||"");
+ if(!entry||entry.status==="loading")return '<div class="mu">Checking departure and destination…</div>';
+ if(entry.status==="error")return '<div class="mu">Route lookup unavailable — origin / destination unknown</div>';
+ const info=entry.info,status=routeConfidence(a,info);
+ if(status==="unavailable")return '<div class="mu">From Unknown → To Unknown • Unavailable (no matching route evidence)</div>';
+ const origin=code(info.origin)||"Unknown",destination=code(info.destination)||"Unknown";
+ const label=status==="filed"?"Filed flight plan":status==="observed"?"ADS-B departure observed":"Estimated from matching public schedule";
+ return '<div style="font-size:17px;font-weight:700;margin:9px 0">From '+esc(origin)+' → To '+esc(destination)+'</div><div class="mu">'+esc(label)+'</div>';
 }
 function routeDetails(a){
- const cs=routeKey(a),r=routeCache.get(cs),m='<div class="mu" style="margin-top:8px">';
+ const cs=routeKey(a),r=routeEntry(a),m='<div class="mu" style="margin-top:8px">';
  if(!cs)return m+'No callsign or registration available to look up a route.</div>';
  if(!r)return m+'Choose Show Route to look for filed waypoints and recorded ADS-B history.</div>';
  if(r.status==="loading")return m+'Checking filed route and recorded flight path…</div>';
  if(r.status==="error")return m+'Route lookup temporarily unavailable.</div>';
  if(r.status!=="ok")return m+'No verified route available for this aircraft. Actual ADS-B track may still appear after monitoring.</div>';
  const info=r.info,S=info.sources||{},code=p=>p&&(p.iata||p.icao||"");
- const valid=routeMatchesAircraft(a,info);
+ const valid=routeConfidence(a,info)!=="unavailable";
  const filed=filedKind(info),dep=info.departure&&info.departure.time?" • Departed "+new Date(info.departure.time*1000).toUTCString().slice(17,22)+"Z":"";
  let section="";
  if(filed){
@@ -302,7 +297,7 @@ function routeDetails(a){
   section='<div class="mu" style="margin-top:6px">No filed waypoints available. Detailed filed flight plans require FlightAware AeroAPI access; other route information is inferred or sourced from public schedules.</div>';
  }
  if(!valid)section+='<div class="mu">The reported origin/destination does not agree with this aircraft’s position, so the estimated route was withheld.</div>';
- const type=filed?"Filed route":S.airports==="ADS-B departure"?"Departure detected from ADS-B history":S.airports?"Schedule match checked against ADS-B departure":"Route unconfirmed";
+ const type=filed?"Filed flight plan":S.airports==="ADS-B departure"?"ADS-B departure observed":S.airports==="adsbdb"?"Estimated schedule match":"Route unconfirmed";
  const origin=valid?code(info.origin)||"?":"?",destination=valid?code(info.destination)||"?":"?";
  return '<div style="margin-top:8px"><b>'+esc(origin)+' → '+esc(destination)+'</b>'+(info.airline?' <span class="mu">'+esc(info.airline)+'</span>':'')+'<span class="mu">'+esc(dep)+'</span></div>'+
    '<div class="mu">'+esc(type)+'</div>'+section+
@@ -331,7 +326,7 @@ function gcLine(o,d){
  return line;
 }
 function drawFlightPlan(a){
- const e=routeCache.get(routeKey(a)),info0=e&&e.info,info=routeMatchesAircraft(a,info0)?info0:(info0?{...info0,origin:null,destination:null,filed:[]}:null),pts=[];
+ const e=routeEntry(a),info0=e&&e.info,info=routeMatchesAircraft(a,info0)?info0:(info0?{...info0,origin:null,destination:null,filed:[]}:null),pts=[];
  const okp=p=>p&&Number.isFinite(Number(p.latitude))&&Number.isFinite(Number(p.longitude));
  let actual=[];
  if(info){
@@ -445,7 +440,7 @@ function draw(){
  if(a&&follow&&!motion.has(a.hex))map.panTo([a.lat,a.lon],{animate:false});
  renderSel();if(view==="traffic"||(view==="search"&&document.activeElement!==$("qi")))renderView();
 }
-function pick(h){homeMode=false;sel=h;const a=data.find(x=>x.hex===h);if(a){map.panTo([a.lat,a.lon]);lookupAirports(a);lookupRoute(a,false)}draw()}
+function pick(h){homeMode=false;sel=h;const a=data.find(x=>x.hex===h);if(a){map.panTo([a.lat,a.lon]);lookupRoute(a,false)}draw()}
 const card=a=>{const d=dme(a),b=(Math.atan2(Math.sin(rad(a.lon-me.lon))*Math.cos(rad(a.lat)),Math.cos(rad(me.lat))*Math.sin(rad(a.lat))-Math.sin(rad(me.lat))*Math.cos(rad(a.lat))*Math.cos(rad(a.lon-me.lon)))*180/Math.PI+360)%360;return[d,b]};
 // Manually saved type photos take precedence; otherwise try a photo of this particular airframe.
 const psCache=new Map();
@@ -527,7 +522,6 @@ async function lookupFlight(){
   data=data.filter(a=>a.hex!==match.hex).concat(match);
   // Show the whole trip (not just a follow-zoom): turn the route on, load the plan, then fit the map to it.
   homeMode=false;sel=match.hex;follow=false;trailOn=true;
-   lookupAirports(match);
   searchError="Found "+nm(match)+" via "+source+(resolved!==query?" ("+query+" → "+resolved+")":"")+" — loading filed route and flown path…";
   const t=trails[match.hex]||(trails[match.hex]=[]);t.push([match.lat,match.lon]);
   map.flyTo([match.lat,match.lon],12,{duration:1});
