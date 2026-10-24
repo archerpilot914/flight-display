@@ -53,6 +53,8 @@ input,select{width:100%;padding:9px;background:var(--bg);color:var(--tx);border:
 .airport-flight-rule-dot{filter:drop-shadow(0 0 5px #000) drop-shadow(0 0 3px #fff8)}
 .airport-label{position:absolute;left:13px;top:-10px;display:flex;gap:4px;align-items:center;white-space:nowrap;background:#061729eb;color:#fff;border:1px solid #4d6a82;border-radius:5px;padding:3px 5px;font-size:13px;font-weight:800;text-shadow:0 1px 2px #000;box-shadow:0 2px 6px #0008;pointer-events:none}
 .airport-label small{font-size:11px;font-weight:800}
+.small-airport-label{background:#091725e6;color:#e1e8f1;border:1px solid #8ca1b6;border-radius:5px;padding:3px 5px;font-size:12px;font-weight:750;white-space:nowrap;text-shadow:0 1px 2px #000;box-shadow:0 2px 5px #0009;pointer-events:none}
+.small-airport-label.private{font-size:11px;opacity:.9}
 .rl{background:#0a1628d0;padding:1px 6px;border-radius:4px;color:#fff;font-size:13px;font-weight:600;text-shadow:0 0 3px #000;white-space:nowrap}
 .me{width:16px;height:16px;border-radius:50%;background:#38bdf8;border:3px solid #fff;margin:-8px 0 0 -8px;box-shadow:0 0 8px #38bdf8}
 #sel .photo{float:right;width:44%;max-height:96px;object-fit:cover;border-radius:6px;margin:0 0 6px 8px}
@@ -100,6 +102,45 @@ const SOURCES=[ // Try the same-origin Worker relay, then direct sources
  {n:"OpenSky",min:30000,u:(a,b,r)=>{a=+a;b=+b;const d=r/60,e=d/Math.cos(a*Math.PI/180);return `https://opensky-network.org/api/states/all?lamin=${a-d}&lomin=${b-e}&lamax=${a+d}&lomax=${b+e}`},
   p:j=>(j.states||[]).filter(t=>t[5]!=null&&t[6]!=null).map(t=>({hex:t[0],flight:(t[1]||"").trim(),lat:t[6],lon:t[5],alt_baro:t[8]?"ground":(t[7]!=null?Math.round(t[7]*3.28084):undefined),gs:t[9]!=null?t[9]*1.94384:undefined,track:t[10],baro_rate:t[11]!=null?Math.round(t[11]*196.85):undefined,squawk:t[14],category:t[17]===8?"A7":""}))}];
 const AP=[["KLCI","Laconia",43.5727,-71.4189],["KCON","Concord",43.2027,-71.5023],["KMHT","Manchester",42.9326,-71.4357],["KASH","Nashua",42.7817,-71.5148],["KPSM","Portsmouth",43.0779,-70.8233],["KSFM","Sanford",43.3939,-70.7088],["KDAW","Rochester",43.2841,-71.0292],["KPWM","Portland",43.6462,-70.3093],["KBOS","Boston Logan",42.3643,-71.0052],["KBED","Hanscom",42.47,-71.289],["KORH","Worcester",42.2673,-71.8757],["KEEN","Keene",42.8984,-72.2708],["KLEB","Lebanon",43.6261,-72.3042]];
+// Identifiers and coordinates sourced from New Hampshire airport listings; labels are not navigation data.
+const dms=x=>{const [d,m,sec]=x.split(":").map(Number);return d+m/60+sec/3600};
+const SMALL_AP=`1P1|Plymouth Municipal|43:46:45|71:45:13|0
+2N2|Newfound Valley|43:35:31|71:45:05|0
+4MB|Moultonborough|43:46:06|71:23:12|0
+2B3|Parlin Field|43:23:17|72:11:21|0
+5B9|Dean Memorial|44:04:50|72:00:28|0
+1B5|Franconia|44:11:45|71:44:58|0
+8B2|Twin Mountain|44:15:50|71:32:51|0
+KBML|Berlin Regional|44:34:31|71:10:33|0
+KHIE|Mount Washington Regional|44:22:03|71:32:40|0
+KCNH|Claremont Municipal|43:22:13|72:22:07|0
+KAFN|Jaffrey Silver Ranch|42:48:18|72:00:10|0
+7B3|Hampton Airfield|42:57:45|70:49:43|0
+8B1|Hawthorne-Feather Airpark|43:04:00|71:53:58|0
+2G8|Gorham|44:23:35|71:11:48|0
+KERR|Errol|44:47:32|71:09:51|0
+4C4|Gifford Field|44:53:00|71:29:58|0
+NH18|Chickville|43:44:00|71:09:04|1
+NH15|Locke Lake|43:23:12|71:14:00|1
+NH31|Mountain View Field|43:39:00|71:08:58|1
+NH25|Flying H Skyport|43:41:12|71:17:21|1
+12NH|Gile Pond|43:29:43|71:39:15|1
+NH20|Ward Field|43:29:32|71:38:45|1
+94NH|Tucker Farm|43:28:35|71:44:50|1
+NH49|Bradley Field|43:58:13|71:40:46|1
+NH38|Leavitt|43:58:21|71:10:11|1
+NH69|Windsock Village|43:49:50|71:11:13|1
+NH96|Wentworth Aerodrome|43:52:24|71:54:16|1
+NH40|Eagles Nest|43:24:16|71:57:01|1
+NH07|Cooper Farm|43:16:49|71:27:23|1
+NH84|Northwood|43:12:27|71:13:16|1
+NH43|Murphy-Sherwood Park|43:10:46|71:08:13|1
+NH88|Country Club Air Park|43:04:02|71:36:40|1
+NH86|Intervale|43:10:30|71:47:14|1
+NH61|Heaton|42:58:05|71:10:52|1
+NH60|Huff Memorial|42:57:38|71:39:12|1
+01NH|Moore Airfield|43:38:40|72:05:13|1
+23NH|Windswept|43:07:49|72:00:53|1`.trim().split("\n").map(row=>{const [id,name,la,lo,p]=row.split("|");return[id,name,dms(la),-dms(lo),+p]});
 let cfg={relay:"",poll:10,lat:null,lon:null,radar:true,rings:true,aps:true,nr:25};
 try{Object.assign(cfg,JSON.parse(localStorage.getItem("fdcfg")||"{}"))}catch(e){}
 const save=()=>{try{localStorage.setItem("fdcfg",JSON.stringify(cfg))}catch(e){}};
@@ -141,7 +182,7 @@ function setBase(k){
 }
 setBase(cfg.base);
 const radar=L.tileLayer.wms("https://opengeo.ncep.noaa.gov/geoserver/conus/conus_bref_qcd/ows",{layers:"conus_bref_qcd",format:"image/png",transparent:true,opacity:.65,zIndex:5});
-const ringL=L.layerGroup(), apL=L.layerGroup(), acL=L.layerGroup().addTo(map), trL=L.layerGroup().addTo(map), meL=L.layerGroup().addTo(map);
+const ringL=L.layerGroup(), apL=L.layerGroup(), smallApL=L.layerGroup(), acL=L.layerGroup().addTo(map), trL=L.layerGroup().addTo(map), meL=L.layerGroup().addTo(map);
 function drawHome(){
  ringL.clearLayers();meL.clearLayers();
  [5,10,25].forEach(r=>{L.circle([me.lat,me.lon],{radius:r*NM,color:cfg.base==="sat"?"#ffffff":"#0b3d91",weight:1.8,dashArray:"6 6",fill:false,opacity:.7}).addTo(ringL);
@@ -160,7 +201,20 @@ function drawAps(){
   }).addTo(apL);
  });
 }
-function layers(){const s=(l,on)=>on?l.addTo(map):map.removeLayer(l);s(ringL,cfg.rings);s(apL,cfg.aps);s(radar,cfg.radar)}
+function drawSmallAirports(){
+ smallApL.clearLayers();
+ if(!cfg.aps||map.getZoom()<9)return;
+ const showPrivate=map.getZoom()>=11,bounds=map.getBounds().pad(.1);
+ SMALL_AP.forEach(([id,name,la,lo,privateUse])=>{
+  if((privateUse&&!showPrivate)||!bounds.contains([la,lo]))return;
+  L.circleMarker([la,lo],{radius:privateUse?5:6,color:"#d0dce8",weight:2,fillColor:"#677c90",fillOpacity:.95})
+   .bindTooltip(id+" • "+name+(privateUse?" (private use)":"")+" • no METAR category",{direction:"top"})
+   .on("click",()=>selectWeatherAirport(id,true)).addTo(smallApL);
+  L.marker([la,lo],{interactive:false,icon:L.divIcon({className:"",iconSize:[0,0],html:`<div class="small-airport-label${privateUse?" private":""}" style="position:absolute;left:11px;top:-9px">${esc(id)}</div>`})}).addTo(smallApL);
+ });
+}
+map.on("zoomend moveend",drawSmallAirports);
+function layers(){const s=(l,on)=>on?l.addTo(map):map.removeLayer(l);s(ringL,cfg.rings);s(apL,cfg.aps);s(smallApL,cfg.aps);s(radar,cfg.radar);drawSmallAirports()}
 drawHome();drawAps();layers();
 
 // ---------- filed route + flown path ----------
@@ -550,7 +604,7 @@ async function loadCats(){
 }
 
 function selectWeatherAirport(id,center=false){
- const ap=AP.find(a=>a[0]===id);if(!ap)return;
+ const ap=AP.concat(SMALL_AP).find(a=>a[0]===id);if(!ap)return;
  selectedWeatherAirport=id;
  if(center){homeMode=false;map.setView([ap[2],ap[3]],11)}
  loadWx();
@@ -558,7 +612,8 @@ function selectWeatherAirport(id,center=false){
 async function loadWx(){
  const request=++weatherRequest;
  const near=AP.map(a=>({id:a[0],n:a[1],lat:a[2],lon:a[3],d:dist(me.lat,me.lon,a[2],a[3])})).sort((a,b)=>a.d-b.d);
- const chosen=near.find(a=>a.id===selectedWeatherAirport)||near[0];
+ const extra=SMALL_AP.find(a=>a[0]===selectedWeatherAirport);
+ const chosen=near.find(a=>a.id===selectedWeatherAirport)||(extra?{id:extra[0],n:extra[1],lat:extra[2],lon:extra[3],d:dist(me.lat,me.lon,extra[2],extra[3])}:null)||near[0];
  const selected=!!selectedWeatherAirport;
  const lookup=selected?[chosen]:near.slice(0,4);
  $("loc").textContent=chosen.id;
