@@ -107,7 +107,10 @@ async function plan(env, ident, hex, pos) {
       const r = await fa(`/flights/${encodeURIComponent(ident)}?max_pages=1`);
       if (r.ok) {
         const flights = (await r.json()).flights || [];
-        const f = flights.find((x) => x.actual_off && !x.actual_on) || flights.find((x) => x.actual_off) || flights[0];
+        const depIcao = out.departure && out.departure.airport && out.departure.airport.icao;
+        const airborne = flights.filter((x) => x.actual_off && !x.actual_on);
+        const f = airborne.find((x) => depIcao && x.origin && x.origin.code_icao === depIcao)
+          || airborne[0] || flights.find((x) => x.actual_off) || flights[0];
         if (f && f.fa_flight_id) {
           const [rr, tr] = await Promise.all([fa(`/flights/${f.fa_flight_id}/route`), fa(`/flights/${f.fa_flight_id}/track`)]);
           const rj = rr.ok ? await rr.json() : {};
@@ -123,6 +126,39 @@ async function plan(env, ident, hex, pos) {
         }
       }
     } catch (e) { /* fall through to free sources */ }
+  }
+
+  // 2b) Position-checked ADSB.lol routes, only when a current position is available.
+  // Keep the existing Worker endpoints and only accept the provider's plausible=true result.
+  if ((!okA(out.origin) || !okA(out.destination)) && pos && /^[A-Z0-9]{3,10}$/.test(ident)) {
+    try {
+      const response = await fetch("https://api.adsb.lol/api/0/routeset", {
+        method:"POST",
+        headers:{...UA,"Content-Type":"application/json","Accept":"application/json"},
+        body:JSON.stringify({planes:[{callsign:ident,lat:pos[0],lng:pos[1]}]}),
+        signal:AbortSignal.timeout(8000)
+      });
+      if (response.ok) {
+        const payload=await response.json();
+        const route=Array.isArray(payload)?payload.find(x=>x && String(x.callsign||"").toUpperCase()===ident):null;
+        let airports=(route && Array.isArray(route._airports)?route._airports:[])
+          .filter(p=>num(p.lat)!==null && num(p.lon)!==null);
+        const knownDep=out.departure && out.departure.airport && out.departure.airport.icao;
+        if (knownDep) {
+          const at=airports.findIndex(p=>String(p.icao||"").toUpperCase()===knownDep);
+          airports=at<0?[]:airports.slice(at);
+        }
+        if (route && route.plausible===true && airports.length>=2) {
+          const ap=p=>({icao:p.icao||null,iata:p.iata||null,name:p.name||null,city:p.location||null,latitude:num(p.lat),longitude:num(p.lon)});
+          const origin=ap(airports[0]),destination=ap(airports[airports.length-1]);
+          if (plausible([origin.latitude,origin.longitude],[destination.latitude,destination.longitude],pos)) {
+            out.origin=origin;out.destination=destination;
+            out.sources.airports="adsb.lol route data, position-checked";
+            out.validated=true;
+          }
+        }
+      }
+    } catch(e) { /* provider unavailable: continue with the existing matching checks */ }
   }
 
   // 3) Free schedule database (adsbdb). It is keyed by callsign only, so it can describe a different
@@ -143,7 +179,7 @@ async function plan(env, ident, hex, pos) {
             if (plausible([o.latitude, o.longitude], [d.latitude, d.longitude], pos)) use = [o, d];
             else if (plausible([d.latitude, d.longitude], [o.latitude, o.longitude], pos)) use = [d, o];
           } else if (!pos) use = [o, d];
-          if (use) { out.origin = use[0]; out.destination = use[1]; out.sources.airports = "adsbdb"; }
+          if (use) { out.origin = use[0]; out.destination = use[1]; out.sources.airports = "adsbdb"; out.validated = true; }
           else out.notes.push(`The stored schedule route (${o.iata || o.icao} to ${d.iata || d.icao}) doesn't match where this aircraft actually departed, so it was ignored.`);
         }
       }

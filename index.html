@@ -263,6 +263,7 @@ function routeConfidence(a,info){
  if(filedKind(info))return "filed";
  if(info.sources?.airports==="ADS-B departure")return "observed";
  if(info.sources?.airports==="adsbdb")return "estimated";
+ if(info.sources?.airports==="adsb.lol route data, position-checked")return "position-checked";
  return info.origin||info.destination?"estimated":"unavailable";
 }
 function airportSummary(a){
@@ -272,7 +273,7 @@ function airportSummary(a){
  const info=entry.info,status=routeConfidence(a,info);
  if(status==="unavailable")return '<div class="mu">From Unknown → To Unknown • Unavailable (no matching route evidence)</div>';
  const origin=code(info.origin)||"Unknown",destination=code(info.destination)||"Unknown";
- const label=status==="filed"?"Filed flight plan":status==="observed"?"ADS-B departure observed":"Estimated from matching public schedule";
+ const label=status==="filed"?"Filed flight plan":status==="observed"?"ADS-B departure observed":status==="position-checked"?"Position-checked ADSB.lol route":"Estimated from matching public schedule";
  return '<div style="font-size:17px;font-weight:700;margin:9px 0">From '+esc(origin)+' → To '+esc(destination)+'</div><div class="mu">'+esc(label)+'</div>';
 }
 function routeDetails(a){
@@ -297,7 +298,7 @@ function routeDetails(a){
   section='<div class="mu" style="margin-top:6px">No filed waypoints available. Detailed filed flight plans require FlightAware AeroAPI access; other route information is inferred or sourced from public schedules.</div>';
  }
  if(!valid)section+='<div class="mu">The reported origin/destination does not agree with this aircraft’s position, so the estimated route was withheld.</div>';
- const type=filed?"Filed flight plan":S.airports==="ADS-B departure"?"ADS-B departure observed":S.airports==="adsbdb"?"Estimated schedule match":"Route unconfirmed";
+ const type=filed?"Filed flight plan":S.airports==="ADS-B departure"?"ADS-B departure observed":S.airports==="adsbdb"?"Estimated schedule match":S.airports==="adsb.lol route data, position-checked"?"Position-checked ADSB.lol route":"Route unconfirmed";
  const origin=valid?code(info.origin)||"?":"?",destination=valid?code(info.destination)||"?":"?";
  return '<div style="margin-top:8px"><b>'+esc(origin)+' → '+esc(destination)+'</b>'+(info.airline?' <span class="mu">'+esc(info.airline)+'</span>':'')+'<span class="mu">'+esc(dep)+'</span></div>'+
    '<div class="mu">'+esc(type)+'</div>'+section+
